@@ -20,7 +20,7 @@
 
 ## Overview
 
-Spatial heterogeneity in cyanobacterial thylakoid membranes has been observed. However, it is not fully clear how spatial organization forms and what purpose it serves. This project uses computational membranes and lattice diffusion to investigate how the formation of pigment-protein microdomains and crystalline arrays affects the movement within the cyanobacterial thylakoid membrane.
+Spatial heterogeneity in cyanobacterial thylakoid membranes has been observed. However, it is not fully clear how spatial organization forms and what purpose it serves. This project uses computational membranes and lattice diffusion to investigate how the formation of pigment-protein microdomains and crystalline arrays affect the movement within the cyanobacterial thylakoid membrane.
 
 ---
 
