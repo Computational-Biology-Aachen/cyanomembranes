@@ -1,6 +1,6 @@
 # Cyanomembranes
 
-> Investigating effects of spatial organization in cyanobacterial thylakoid membranes. Repository to reproduce figures of **Mesoscale crowding and microdomain formation positively influence plastoquinone diffusion in simulated cyanobacteria thylakoid membrane**
+> Repository to reproduce figures of **Mesoscale crowding and microdomain formation positively influence plastoquinone diffusion in simulated cyanobacteria thylakoid membrane**
 
 ---
 
@@ -21,6 +21,7 @@
 ## Overview
 
 Spatial heterogeneity in cyanobacterial thylakoid membranes has been observed. However, it is not fully clear how spatial organization forms and what purpose it serves. This project uses computational membranes and lattice diffusion to investigate how the formation of pigment-protein microdomains and crystalline arrays affects the movement within the cyanobacterial thylakoid membrane.
+
 ---
 
 ## Repository Structure
