@@ -132,7 +132,7 @@ def get_total_charge(structure: Structure) -> float:
 
 def make_polygon(
     in_file: Path,
-    out_file: Path,
+    out_file: Path | None,
     viewing_axis: np.ndarray | None = None,
     atom_z_range: tuple | None = None,
 ) -> tuple[np.ndarray, list[np.ndarray], Polygon]:
@@ -193,9 +193,10 @@ def make_polygon(
     )  # use concave hull by alphashape
     concave_hull = cast(Polygon, concave_hull)
 
-    # Save to WKT (Well-Known Text) format
-    with out_file.open("w") as f:
-        f.write(concave_hull.wkt)
+    if out_file:
+        # Save to WKT (Well-Known Text) format
+        with out_file.open("w") as f:
+            f.write(concave_hull.wkt)
 
     return projected_coords, edge_points, concave_hull
 
