@@ -24,9 +24,11 @@ def plot_individual_runs(run, condition, scenario, new_out, aim=False):
         if not scenario.plot_runs.should_plot(i, len(run.runs)):
             continue
 
-        fig, ax = plt.subplots(figsize=(3, 2.5), dpi=300)
+        fig, ax = plt.subplots(figsize=(3, 3), dpi=300)
         single_run.plot_run(ax=ax, aim_area=aim)
         ax.set_aspect("equal")
+        ax.set_xlabel(r"\mathrm{\AA}")
+        ax.set_ylabel(r"\mathrm{\AA}")
         fig.tight_layout()
         if scenario.fully_crystal:
             with_mv = True
@@ -346,7 +348,7 @@ def _plot_fpt_crystals(scenario, scalars, new_out, pic_out):
 
                 n_panels = len(nprot_lst)
                 fig, axes = plt.subplots(
-                    1, n_panels, figsize=(3 * n_panels, 4), sharey=True
+                    1, n_panels, figsize=(3 * n_panels, 3), sharey=False
                 )
 
                 if n_panels == 1:
@@ -392,7 +394,7 @@ def _plot_fpt_crystals(scenario, scalars, new_out, pic_out):
                     fontsize=9,
                 )
                 fig.tight_layout()
-                fig.savefig(pic_out / f"membrane_fpt_{pkey}_{crystal_prot}_mv{mv}.png")
+                fig.savefig(pic_out / f"membrane_fpt_{pkey}_{crystal_prot}_mv{mv}.png", dpi=400)
 
 
 def plot_fpt(scenario, out_root):

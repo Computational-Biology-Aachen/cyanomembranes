@@ -1,5 +1,4 @@
 from __future__ import annotations
-cyanomembranes
 import gc
 from collections.abc import Iterator
 from copy import deepcopy
