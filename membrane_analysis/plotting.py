@@ -208,6 +208,7 @@ def plot_diffusion(scenario, out_root):
     axes1[1].set_xlabel("% Coverage", fontsize=8)
     axes1[1].set_ylabel(r"$D_\infty$", fontsize=8)
     axes1[1].tick_params(axis="both", which="major", labelsize=7)
+    axes1[1].legend(fontsize=7)
 
     axes1[0].set_xlabel("# Proteins", fontsize=8)
     axes1[0].set_ylabel(r"$D_\infty$", fontsize=8)
@@ -368,7 +369,7 @@ def _plot_fpt_crystals(scenario, scalars, new_out, pic_out):
                         ax.plot(
                             ts_df["Time"] * scenario.time_scale,
                             ts_df["Active"],
-                            label=f"cg={row['cg']}",
+                            label=f"c%={row['cg']}",
                             linewidth=2,
                             alpha=0.7,
                             color=color,
@@ -495,7 +496,7 @@ def _plot_rate_crystals(scenario, scalars, new_out, pic_out):
                         ax.plot(
                             ts_df["Time"] * scenario.time_scale,
                             ts_df["Hits"],
-                            label=f"cg={row['cg']}",
+                            label=f"c%={row['cg']}",
                             linewidth=2,
                             alpha=0.7,
                             color=color,
