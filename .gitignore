@@ -140,9 +140,11 @@ cython_debug/
 *.wkt
 *.pdb
 
+
 # Ignore data
 examples/Data/*
 data_cyano
+data_plants
 output/
 tmp/
 # pixi environments

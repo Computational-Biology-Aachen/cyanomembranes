@@ -37,7 +37,7 @@ Spatial heterogeneity in cyanobacterial thylakoid membranes has been observed. H
 │   └── utils.py
 ├── notebooks
 │   ├── analysis.ipynb         # Execute model scenarios, save output and create figures
-│   ├── crystal_analysis.ipynb 
+│   ├── crystal_analysis.ipynb
 │   ├── __init__.py
 │   ├── make_figures.ipynb     # Use analysis figures to create pub figures
 │   ├── make_membranes.ipynb   # Create computational membranes
@@ -116,7 +116,7 @@ What it does:
 ### Step 2 — Membrane Figures (`notebooks/plot_membranes.ipynb`)
 
 What it does:
-- Generates example figures of in silico membranes 
+- Generates example figures of in silico membranes
 - Performs RDF and Channel width analysis
 
 ---
@@ -125,7 +125,7 @@ What it does:
 
 What it does:
 - Runs simulations based on scenarios defined in scenario.py
-- Saves results in output directory 
+- Saves results in output directory
 - Attention: Can take a long time depending on machine and available cores
 - Warning: Takes a lot of RAM. For machines wi RAM lower than 64 GB it is highly recommended to increase the save interval in the membrane_analysis/config.py file
 
@@ -142,7 +142,7 @@ What it does:
 
 ## Methods Summary
 
-- Formation of computational thylakoid membranes: No-fit polygons and compression 
+- Formation of computational thylakoid membranes: No-fit polygons and compression
 - Electron carrier movement: Lattice diffusion
 
 ---
@@ -165,12 +165,12 @@ If you use this code or data, please cite:
 
 ## License
 
-Code: [](LICENSE)  
+Code: [](LICENSE)
 Data: [](https://creativecommons.org/licenses/by/4.0/) *(adjust as appropriate)*
 
 ---
 
 ## Contact
 
-**Corresponding author:** Your Name — your.email@institution.de  
+**Corresponding author:** Tim Nies — tim.nies@rwth-aachen.de
 Feel free to open a [GitHub issue](https://github.com/your-org/your-repo/issues) for questions about the code.
