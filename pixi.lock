@@ -38,6 +38,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/cached-property-1.5.2-hd8ed1ab_1.tar.bz2
       - conda: https://conda.anaconda.org/conda-forge/noarch/cached_property-1.5.2-pyha770c72_1.tar.bz2
       - conda: https://conda.anaconda.org/conda-forge/linux-64/cairo-1.18.4-h3394656_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/noarch/celluloid-0.2.0-pyhd8ed1ab_0.tar.bz2
       - conda: https://conda.anaconda.org/conda-forge/noarch/certifi-2026.4.22-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/cffi-2.0.0-py313hf01b4d8_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/cfgv-3.5.0-pyhd8ed1ab_0.conda
@@ -735,6 +736,18 @@ packages:
   purls: []
   size: 978114
   timestamp: 1741554591855
+- conda: https://conda.anaconda.org/conda-forge/noarch/celluloid-0.2.0-pyhd8ed1ab_0.tar.bz2
+  sha256: f4d5f8296e133207854be7b7ff7686b72922b14db21f9bd5b80d7608d1b67573
+  md5: 946a4175fe3345e54660073fce22c943
+  depends:
+  - matplotlib-base
+  - python >=3.6
+  license: MIT
+  license_family: MIT
+  purls:
+  - pkg:pypi/celluloid?source=hash-mapping
+  size: 8460
+  timestamp: 1648765136373
 - conda: https://conda.anaconda.org/conda-forge/noarch/certifi-2026.4.22-pyhd8ed1ab_0.conda
   sha256: 989db6e5957c4b44fa600c68c681ec2f36a55e48f7c7f1c073d5e91caa8cd878
   md5: 929471569c93acefb30282a22060dcd5
@@ -874,7 +887,7 @@ packages:
 - pypi: ./
   name: cyanomembranes
   version: 0.1.0
-  sha256: bcd9cf87f76b7e04a4b5126a488021aaf0c3cc487fe5b225a9eaaeec5e0b377c
+  sha256: 7ff0c88427cf5895b4aa2fde4f0704fba32f113bbe8c3f6cffc9a023478e2ac0
   requires_dist:
   - biopython>=1.87,<2
   requires_python: '>=3.11'

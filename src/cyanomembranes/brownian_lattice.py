@@ -1273,6 +1273,7 @@ class ExperimentLattice:
         self.free_raster_chosen_obstacles = free_raster_chosen_obstacles
         if self._config.particle_radius:
             kernel = _make_lattice_particle(self._config.particle_radius)
+            self.kernel = kernel
             free = ~self.raster.astype(bool)
             self.free_centers = binary_erosion(free, kernel, border_value=0)
 
