@@ -139,6 +139,7 @@ cython_debug/
 *wo.pdb
 *.wkt
 *.pdb
+*.csv
 
 
 # Ignore data

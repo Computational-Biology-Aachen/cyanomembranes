@@ -173,4 +173,4 @@ Data: [](https://creativecommons.org/licenses/by/4.0/) *(adjust as appropriate)*
 ## Contact
 
 **Corresponding author:** Tim Nies — tim.nies@rwth-aachen.de
-Feel free to open a [GitHub issue](https://github.com/your-org/your-repo/issues) for questions about the code.
+Feel free to open a [GitHub issue](https://github.com/Computational-Biology-Aachen/cyanomembranes/issues) for questions about the code.
