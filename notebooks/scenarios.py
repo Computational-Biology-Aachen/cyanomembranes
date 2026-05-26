@@ -1,5 +1,6 @@
-from membrane_analysis.config import AnalysisType, PlotRunsConfig, ScenarioConfig
 from shapely import Point
+
+from membrane_analysis.config import AnalysisType, PlotRunsConfig, ScenarioConfig
 
 # ----------------
 # DIFFUSION ANALYSES
@@ -263,27 +264,27 @@ crystal_analysis = ScenarioConfig(
 # --------------------
 
 ALL_SCENARIOS = [
-    #no_md_diff_random_start,
-    #no_md_diff,
+    no_md_diff_random_start,
+    no_md_diff,
     # NO MD FPT
-    #no_md_fpt_random_start,
-    #no_md_fpt,
+    no_md_fpt_random_start,
+    no_md_fpt,
     # FPT PSI
-    #big_md_fpt_random_start,
-    #big_md_fpt,
-    #small_md_fpt_random_start,
-    #small_md_fpt,
+    big_md_fpt_random_start,
+    big_md_fpt,
+    small_md_fpt_random_start,
+    small_md_fpt,
     # RATE PSI
     big_md_rate,
-    #small_md_rate,
+    small_md_rate,
     # FPT PSII
-    #big_md_fpt_random_start_PSII,
-    #big_md_fpt_PSII,
-    #small_md_fpt_random_start_PSII,
-    #small_md_fpt_PSII,
+    big_md_fpt_random_start_PSII,
+    big_md_fpt_PSII,
+    small_md_fpt_random_start_PSII,
+    small_md_fpt_PSII,
     # RATE PSII
-    #big_md_rate_PSII,
-    #small_md_rate_PSII,
+    big_md_rate_PSII,
+    small_md_rate_PSII,
     # CRYSTALS
-    #crystal_analysis,
+    crystal_analysis,
 ]

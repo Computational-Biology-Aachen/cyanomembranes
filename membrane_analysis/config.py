@@ -159,7 +159,6 @@ def make_exp_config(
         cfg.nsteps = 7_000_000
         cfg.save_every = 7_000
 
-    # --- Analysis-type-specific parameters
     if scenario.analysis_type == AnalysisType.AIM:
         cfg.nsteps = 1_000_000
         cfg.save_every = 3_000

@@ -3,14 +3,15 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from matplotlib import cm, colors
+from scipy.interpolate import interp1d
+from sklearn.linear_model import LinearRegression
+
 from membrane_analysis.config import (
     COLORBLIND_PALETTE,
     LABEL_DICT,
     MARKER_LST,
     AnalysisType,
 )
-from scipy.interpolate import interp1d
-from sklearn.linear_model import LinearRegression
 
 from .config import Condition
 from .utils import _timeseries_filename
@@ -256,7 +257,7 @@ def plot_3d_fpt(Active_df, scenario):
     ax.set_xlabel(scenario.time_label, size=12, labelpad=16)
     plt.xticks(rotation=45, ha="right")
     ax.set_ylabel("% Mean Coverage", size=12)
-    ax.set_zlabel("Active fraction", size=12)
+    ax.set_zlabel("Reduced fraction", size=12)
     ax.tick_params(axis="both", labelsize=12)
 
     ax.set_ylim(coverages.min(), coverages.max())
@@ -395,7 +396,9 @@ def _plot_fpt_crystals(scenario, scalars, new_out, pic_out):
                     fontsize=9,
                 )
                 fig.tight_layout()
-                fig.savefig(pic_out / f"membrane_fpt_{pkey}_{crystal_prot}_mv{mv}.png", dpi=400)
+                fig.savefig(
+                    pic_out / f"membrane_fpt_{pkey}_{crystal_prot}_mv{mv}.png", dpi=400
+                )
 
 
 def plot_fpt(scenario, out_root):

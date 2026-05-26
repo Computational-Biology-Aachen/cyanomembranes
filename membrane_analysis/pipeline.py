@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 import gc
 from collections.abc import Iterator
 from copy import deepcopy
@@ -178,10 +179,11 @@ def build_rate_metrics(
     coverage = run.get_mean_coverage()
     df = run.get_mean_hits().iloc[1:]
 
-    hits = run.get_mean_hits().drop("Time", axis=1)
-    time = run.get_mean_hits()["Time"]
+    df_hits = run.get_mean_hits()
+
+    hits_per_int = df_hits.drop("Time", axis=1)["Hits"]
+    time = df_hits["Time"]
     dt = time.diff().iloc[1]
-    hits_per_int = hits.sum(axis=1)
     flux = hits_per_int / dt
     rate_series = flux / replicates
     k_mean = rate_series.iloc[-steady_state_window:].mean()
