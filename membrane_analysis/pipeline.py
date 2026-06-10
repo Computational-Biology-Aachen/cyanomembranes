@@ -191,7 +191,7 @@ def build_rate_metrics(
 
     _, nprot, *rest = condition.key
 
-    fi_times = run.fpt["FirstInactiveTime"]
+    fpt = run.get_mean_fpt()
 
     scalars = ScalarMetrics(
         pkey=condition.pkey,
@@ -204,7 +204,7 @@ def build_rate_metrics(
         k_mean=k_mean,
         k_std=k_std,
         source_files=[str(f) for f in condition.file_lst],
-        first_inactive_time=fi_times.mean(),
+        first_inactive_time=fpt["Mean"],
     )
 
     timeseries = df[["Time", "Hits", "Hits_ci_low", "Hits_ci_high"]].copy()

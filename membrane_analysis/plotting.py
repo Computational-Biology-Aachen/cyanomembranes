@@ -271,7 +271,7 @@ def plot_3d_fpt(Active_df, scenario):
 
 def _finalise_fpt_ax(ax1, scenario):
     ax1.set_xlabel(scenario.time_label, fontsize=8)
-    ax1.set_ylabel("Active %", fontsize=8)
+    ax1.set_ylabel("Reduced fraction %", fontsize=8)
     ax1.tick_params(labelsize=7)
     ax1.grid(True, linestyle=":", linewidth=0.5, alpha=0.5)  # noqa: FBT003
     ax1.legend(loc="upper right")

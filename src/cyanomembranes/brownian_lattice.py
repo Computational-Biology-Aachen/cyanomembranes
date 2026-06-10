@@ -36,6 +36,39 @@ if TYPE_CHECKING:
 def get_buffered_shapes(
     comparison_size: float, shapes: list, buffer: float, constraint_area: Polygon
 ) -> list[Polygon]:
+    """Selects shapes whose area matches a comparison size and intersect a
+    constraint area, then returns the buffered ring around each selected shape.
+
+    For each shape in ``shapes``, the function checks whether its area is
+    approximately equal to ``comparison_size`` (using ``numpy.isclose``) and
+    whether it intersects ``constraint_area``. Qualifying shapes are buffered
+    outward by ``buffer`` units, and the original shape is subtracted from the
+    result, producing a ring-like polygon representing only the newly added
+    buffer zone.
+
+    Parameters
+    ----------
+    comparison_size : float
+        Target area value used to filter shapes. Only shapes whose area is
+        numerically close to this value (per ``numpy.isclose`` defaults) are
+        considered.
+    shapes : list
+        Iterable of geometry objects (e.g. Shapely ``Polygon`` instances) to
+        filter and buffer.
+    buffer : float
+        Distance by which each selected shape is expanded outward. Must be in
+        the same units as the coordinate reference system of ``shapes``.
+    constraint_area : Polygon
+        A Shapely ``Polygon`` used as a spatial filter. Only shapes that
+        intersect this polygon are included in the output.
+
+    Returns
+    -------
+    list[Polygon]
+        A list of Shapely ``Polygon`` objects, each representing the buffered
+        ring (i.e. ``shape.buffer(buffer).difference(shape)``) of a qualifying
+        input shape. Returns an empty list if no shapes meet both criteria.
+    """
     selection_lst = []
     b = constraint_area
     for s in shapes:
@@ -46,6 +79,25 @@ def get_buffered_shapes(
 
 
 def _make_lattice_particle(radius_cells: int) -> np.ndarray:
+    """
+    Create a 2D boolean disk mask of a given radius on a square grid.
+
+    Constructs a square array of side length ``2 * radius_cells + 1`` in which
+    every cell whose distance from the centre is less than or equal to
+    ``radius_cells`` is set to ``True``, forming a filled circular disk.
+
+    Parameters
+    ----------
+    radius_cells : int
+        Radius of the disk in grid cells. The output array will have shape
+        ``(2 * radius_cells + 1, 2 * radius_cells + 1)``.
+
+    Returns
+    -------
+    np.ndarray
+        Boolean array of shape ``(2 * radius_cells + 1, 2 * radius_cells + 1)``
+        where ``True`` indicates cells inside or on the boundary of the disk.
+    """
     x, y = np.ogrid[-radius_cells : radius_cells + 1, -radius_cells : radius_cells + 1]
     mask = x**2 + y**2 <= radius_cells**2
     return mask.astype(bool)
@@ -271,12 +323,12 @@ class ExperimentLatticeRun:
         self,
     ) -> pd.DataFrame:
         """
-        Compute the instantaneous diffusion coefficient as MSD divided by time.
+        Compute the distance-dependent diffusion coefficient as MSD divided by time.
 
         Returns
         -------
-        pd.Series
-            Series of instantaneous diffusion coefficients at each time point.
+        pd.DataFrame
+            Dataframe of distance-dependent diffusion coefficients at each time point.
         """
         mean_traj_df = self.mean_trajectories()
         return pd.DataFrame(
@@ -293,7 +345,7 @@ class ExperimentLatticeRun:
     def get_mean_fpt(
         self,
     ) -> pd.Series:
-        """Compute summary statistics for first-passage (inactive) times.
+        """Computes summary statistics for first-passage (inactive) times.
 
         Calculates mean, standard deviation, standard error of the mean,
         95% confidence interval, median and interquartile range of the
@@ -305,7 +357,7 @@ class ExperimentLatticeRun:
             Series with keys: 'Mean', 'Std', 'Sem', 'Ci_low', 'Ci_high',
             'Median' and 'IQR'.
         """
-        n_fpt = np.sqrt(len(self.fpt))
+        n_fpt = len(self.fpt)
         fi_val = self.fpt.dropna()["FirstInactiveTime"].to_numpy()
 
         mean = np.mean(fi_val)
@@ -547,13 +599,13 @@ class EnsembleExperimentLatticeRun:
         self,
     ) -> pd.DataFrame:
         """
-        Compute the instantaneous diffusion coefficient as MSD divided by time,
+        Compute the distance-dependent diffusion coefficient as MSD divided by time,
         across all runs.
 
         Returns
         -------
-        pd.Series
-            Series of instantaneous diffusion coefficients at each time point.
+        pd.DataFrame
+            DataFrame of distance-dependent diffusion coefficients at each time point.
         """
         mean_run_df = self.mean_over_runs()
         return pd.DataFrame(
@@ -583,7 +635,7 @@ class EnsembleExperimentLatticeRun:
         """
         fi_val = [i.get_mean_fpt()["Mean"] for i in self.runs]
 
-        n_fpt = np.sqrt(len(fi_val))
+        n_fpt = len(fi_val)
 
         mean = np.mean(fi_val)
         median = np.median(fi_val)

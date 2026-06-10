@@ -246,6 +246,20 @@ big_md_rate = ScenarioConfig(
     plot_runs=PlotRunsConfig(enabled=True, max_runs=1),
 )
 
+big_md_rate_coarse = ScenarioConfig(
+    name="big_MD_rate_coarse",
+    analysis_type=AnalysisType.RATE,
+    description=None,
+    random_start_over_whole_membrane=False,  # means start around PSII
+    number_of_proteins={"avg_membrane": [40, 60, 80]},
+    cdegree={"1JB0-PSI-syn-cocc": [0, 0.4, 0.8]},
+    crystal_suffix="_crystal",
+    time_scale=1000.0,
+    time_label="Time / ms",
+    plot_runs=PlotRunsConfig(enabled=True, max_runs=1),
+    lattice_resolution=10,
+)
+
 small_md_rate = ScenarioConfig(
     name="small_MD_rate",
     analysis_type=AnalysisType.RATE,
@@ -319,15 +333,16 @@ ALL_SCENARIOS = [
     # NO MD FPT
     # no_md_fpt_random_start,
     # no_md_fpt,
-    no_md_fpt_coarse,
+    # no_md_fpt_coarse,
     # FPT PSI
     # big_md_fpt_random_start,
-    # big_md_fpt,
+    big_md_fpt,
     # big_md_fpt_coarse
     # small_md_fpt_random_start,
     # small_md_fpt,
     # RATE PSI
     # big_md_rate,
+    # big_md_rate_coarse,
     # small_md_rate,
     # FPT PSII
     # big_md_fpt_random_start_PSII,
@@ -338,5 +353,5 @@ ALL_SCENARIOS = [
     # big_md_rate_PSII,
     # small_md_rate_PSII,
     # CRYSTALS
-    # crystal_analysis,
+    # crystal_analysis
 ]
