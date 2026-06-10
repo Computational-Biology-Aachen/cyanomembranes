@@ -112,6 +112,9 @@ class ScenarioConfig:
     start_area: Optional[object] = None
     aim_area: Optional[object] = None
 
+    # --- Lattice resolution ---
+    lattice_resolution: Optional[int] = None
+
     # --- fully_crystal ----
     fully_crystal: bool = False
 
@@ -168,5 +171,15 @@ def make_exp_config(
     # --- Spatial arrangement ---
     if not scenario.random_start_over_whole_membrane:
         cfg.start_area_by_size = (psii_area, 50, box(0, 0, 5000, 5000))
+
+    if scenario.lattice_resolution:
+        cfg.lattice_resolution = scenario.lattice_resolution
+        cfg.nsteps = int(
+            cfg.nsteps / cfg.lattice_resolution**2
+        )  # correction for lattice resolution
+        cfg.particle_radius = (
+            None  # For this experiment the particle radius should be None
+        )
+        cfg.save_every = int(cfg.save_every / cfg.lattice_resolution**2)
 
     return cfg

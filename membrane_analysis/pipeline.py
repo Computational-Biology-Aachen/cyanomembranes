@@ -191,6 +191,8 @@ def build_rate_metrics(
 
     _, nprot, *rest = condition.key
 
+    fi_times = run.fpt["FirstInactiveTime"]
+
     scalars = ScalarMetrics(
         pkey=condition.pkey,
         nprot=nprot,
@@ -202,6 +204,7 @@ def build_rate_metrics(
         k_mean=k_mean,
         k_std=k_std,
         source_files=[str(f) for f in condition.file_lst],
+        first_inactive_time=fi_times.mean(),
     )
 
     timeseries = df[["Time", "Hits", "Hits_ci_low", "Hits_ci_high"]].copy()
@@ -218,10 +221,20 @@ def build_diffusion_metrics(
     coverage = run.get_mean_coverage()
 
     run_dif = run.get_mean_diff_coefficients_dist()
-    norm_diff_dist = run_dif["D_dist"] / (4 * exp_config.diff_coefficient)
-    norm_diff_dist_ci_low = run_dif["D_dist_ci_low"] / (4 * exp_config.diff_coefficient)
-    norm_diff_dist_ci_high = run_dif["D_dist_ci_high"] / (
-        4 * exp_config.diff_coefficient
+    norm_diff_dist = (
+        exp_config.lattice_resolution**2
+        * run_dif["D_dist"]
+        / (4 * exp_config.diff_coefficient)
+    )
+    norm_diff_dist_ci_low = (
+        exp_config.lattice_resolution**2
+        * run_dif["D_dist_ci_low"]
+        / (4 * exp_config.diff_coefficient)
+    )
+    norm_diff_dist_ci_high = (
+        exp_config.lattice_resolution**2
+        * run_dif["D_dist_ci_high"]
+        / (4 * exp_config.diff_coefficient)
     )
     norm_diff_dist.iloc[0] = 1.0
     sqrt_msd = np.sqrt(run_dif["MSD"])

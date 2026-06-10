@@ -28,8 +28,8 @@ def plot_individual_runs(run, condition, scenario, new_out, aim=False):
         fig, ax = plt.subplots(figsize=(3, 3), dpi=300)
         single_run.plot_run(ax=ax, aim_area=aim)
         ax.set_aspect("equal")
-        ax.set_xlabel(r"\mathrm{\AA}")
-        ax.set_ylabel(r"\mathrm{\AA}")
+        ax.set_xlabel(r"$\mathrm{\AA}$")
+        ax.set_ylabel(r"$\mathrm{\AA}$")
         fig.tight_layout()
         if scenario.fully_crystal:
             with_mv = True
@@ -58,7 +58,6 @@ def plot_diffusion(scenario, out_root):
 
     colors_palette = iter(COLORBLIND_PALETTE)
     markers = iter(MARKER_LST)
-
     fig1, axes1 = plt.subplots(1, 2, figsize=(7, 3))
     parameter_rows = []
     for pkey, nprot in scenario.number_of_proteins.items():
@@ -103,69 +102,73 @@ def plot_diffusion(scenario, out_root):
             }
         )
 
-        current_color = next(colors_palette)
-        current_marker = next(markers)
-        axes1[1].scatter(
-            x,
-            y,
-            s=25,
-            edgecolors=current_color,
-            facecolor="white",
-            marker=current_marker,
-            linewidth=0.6,
-            zorder=3,
-            label=f"{LABEL_DICT[pkey]}",
-        )
-        axes1[1].errorbar(
-            x,
-            y,
-            yerr=yerr,
-            fmt="none",
-            ecolor=current_color,
-            capsize=5,
-            elinewidth=0.5,
-            capthick=0.5,
-        )
+        try:
 
-        axes1[1].plot(
-            x_fit,
-            y_fit_curve,
-            linestyle="--",
-            linewidth=1,
-            color=current_color,
-            zorder=2,
-        )
+            current_color = next(colors_palette)
+            current_marker = next(markers)
+            axes1[1].scatter(
+                x,
+                y,
+                s=25,
+                edgecolors=current_color,
+                facecolor="white",
+                marker=current_marker,
+                linewidth=0.6,
+                zorder=3,
+                label=f"{LABEL_DICT[pkey]}",
+            )
+            axes1[1].errorbar(
+                x,
+                y,
+                yerr=yerr,
+                fmt="none",
+                ecolor=current_color,
+                capsize=5,
+                elinewidth=0.5,
+                capthick=0.5,
+            )
 
-        axes1[0].scatter(
-            x2,
-            y,
-            s=25,
-            edgecolors=current_color,
-            facecolor="white",
-            marker=current_marker,
-            linewidth=0.6,
-            zorder=3,
-            label=f"{LABEL_DICT[pkey]}",
-        )
-        axes1[0].errorbar(
-            x2,
-            y,
-            yerr=yerr,
-            fmt="none",
-            ecolor=current_color,
-            capsize=5,
-            elinewidth=0.5,
-            capthick=0.5,
-        )
+            axes1[1].plot(
+                x_fit,
+                y_fit_curve,
+                linestyle="--",
+                linewidth=1,
+                color=current_color,
+                zorder=2,
+            )
 
-        axes1[0].plot(
-            x_fit2,
-            y_fit_curve2,
-            linestyle="--",
-            linewidth=1,
-            color=current_color,
-            zorder=2,
-        )
+            axes1[0].scatter(
+                x2,
+                y,
+                s=25,
+                edgecolors=current_color,
+                facecolor="white",
+                marker=current_marker,
+                linewidth=0.6,
+                zorder=3,
+                label=f"{LABEL_DICT[pkey]}",
+            )
+            axes1[0].errorbar(
+                x2,
+                y,
+                yerr=yerr,
+                fmt="none",
+                ecolor=current_color,
+                capsize=5,
+                elinewidth=0.5,
+                capthick=0.5,
+            )
+
+            axes1[0].plot(
+                x_fit2,
+                y_fit_curve2,
+                linestyle="--",
+                linewidth=1,
+                color=current_color,
+                zorder=2,
+            )
+        except:
+            pass
 
         fig2, ax2 = plt.subplots(figsize=(6, 4))
         norm = colors.Normalize(vmin=min(nprot), vmax=max(nprot))
@@ -392,7 +395,7 @@ def _plot_fpt_crystals(scenario, scalars, new_out, pic_out):
                 fig.suptitle(
                     f"{LABEL_DICT.get(pkey, pkey)}-"
                     f"{LABEL_DICT.get(crystal_prot, crystal_prot)}, "
-                    f"mv={mv}",
+                    rf"$\delta$={mv}",
                     fontsize=9,
                 )
                 fig.tight_layout()
@@ -521,7 +524,7 @@ def _plot_rate_crystals(scenario, scalars, new_out, pic_out):
                 fig.suptitle(
                     f"{LABEL_DICT.get(pkey, pkey)}-"
                     f"{LABEL_DICT.get(crystal_prot, crystal_prot)}, "
-                    f"mv={mv}",
+                    rf"$\delta$={mv}",
                     fontsize=9,
                 )
                 fig.tight_layout()
@@ -539,7 +542,7 @@ def _plot_rate_constants(scenario, scalars, pic_out):
         color = next(color_iter)
         if scenario.cdegree is not None:
             crystal_prot, cg = group_key
-            label = f"{LABEL_DICT.get(crystal_prot, crystal_prot)}, cg={cg}"
+            label = f"{LABEL_DICT.get(crystal_prot, crystal_prot)}, c%={cg}"
         else:
             label = LABEL_DICT.get(group_key, group_key)
 

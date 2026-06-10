@@ -23,6 +23,24 @@ no_md_diff_random_start = ScenarioConfig(
     plot_runs=PlotRunsConfig(enabled=True, max_runs=1),
 )
 
+no_md_diff_random_start_coarse = ScenarioConfig(
+    name="no_MD_diff_random_start_coarse",
+    analysis_type=AnalysisType.DIFFUSION,
+    description=None,
+    random_start_over_whole_membrane=True,
+    number_of_proteins={
+        "3WU2-PSII-ThermosynVul": [700, 800, 900],
+        "4H13-cytb6f": [1100, 1400],
+        "1JB0-PSI-syn-cocc": [500],
+        "avg_membrane": [90, 100, 110],
+    },
+    cdegree=None,
+    time_scale=1000.0,
+    time_label="Time / ms",
+    lattice_resolution=10,
+    plot_runs=PlotRunsConfig(enabled=True, max_runs=1),
+)
+
 
 no_md_diff = ScenarioConfig(
     name="no_MD_diff",
@@ -72,6 +90,21 @@ no_md_fpt = ScenarioConfig(
     plot_runs=PlotRunsConfig(enabled=True, max_runs=1),
 )
 
+no_md_fpt_coarse = ScenarioConfig(
+    name="no_MD_fpt_coarse",
+    analysis_type=AnalysisType.FPT,
+    description=None,
+    random_start_over_whole_membrane=False,  # means start around PSII
+    number_of_proteins={
+        "avg_membrane": [10, 20, 30, 40, 50, 60, 70, 80, 90, 100],
+    },
+    cdegree=None,
+    time_scale=1000.0,
+    time_label="Time / ms",
+    plot_runs=PlotRunsConfig(enabled=True, max_runs=1),
+    lattice_resolution=10,
+)
+
 
 big_md_fpt_random_start = ScenarioConfig(
     name="big_MD_fpt_random_start",
@@ -98,6 +131,21 @@ big_md_fpt = ScenarioConfig(
     time_label="Time / ms",
     plot_runs=PlotRunsConfig(enabled=True, max_runs=1),
 )
+
+big_md_fpt_coarse = ScenarioConfig(
+    name="big_MD_fpt_coarse",
+    analysis_type=AnalysisType.FPT,
+    description=None,
+    random_start_over_whole_membrane=False,  # means start around PSII
+    number_of_proteins={"avg_membrane": [40, 60, 80]},
+    cdegree={"1JB0-PSI-syn-cocc": [0, 0.4, 0.8]},
+    crystal_suffix="_crystal",
+    time_scale=1000.0,
+    time_label="Time / ms",
+    plot_runs=PlotRunsConfig(enabled=True, max_runs=1),
+    lattice_resolution=10,
+)
+
 
 small_md_fpt_random_start = ScenarioConfig(
     name="small_MD_fpt_random_start",
@@ -264,27 +312,31 @@ crystal_analysis = ScenarioConfig(
 # --------------------
 
 ALL_SCENARIOS = [
-    no_md_diff_random_start,
-    no_md_diff,
+    # Diffusion
+    # no_md_diff_random_start,
+    # no_md_diff_random_start_coarse
+    # no_md_diff,
     # NO MD FPT
-    no_md_fpt_random_start,
-    no_md_fpt,
+    # no_md_fpt_random_start,
+    # no_md_fpt,
+    no_md_fpt_coarse,
     # FPT PSI
-    big_md_fpt_random_start,
-    big_md_fpt,
-    small_md_fpt_random_start,
-    small_md_fpt,
+    # big_md_fpt_random_start,
+    # big_md_fpt,
+    # big_md_fpt_coarse
+    # small_md_fpt_random_start,
+    # small_md_fpt,
     # RATE PSI
-    big_md_rate,
-    small_md_rate,
+    # big_md_rate,
+    # small_md_rate,
     # FPT PSII
-    big_md_fpt_random_start_PSII,
-    big_md_fpt_PSII,
-    small_md_fpt_random_start_PSII,
-    small_md_fpt_PSII,
+    # big_md_fpt_random_start_PSII,
+    # big_md_fpt_PSII,
+    # small_md_fpt_random_start_PSII,
+    # small_md_fpt_PSII,
     # RATE PSII
-    big_md_rate_PSII,
-    small_md_rate_PSII,
+    # big_md_rate_PSII,
+    # small_md_rate_PSII,
     # CRYSTALS
-    crystal_analysis,
+    # crystal_analysis,
 ]

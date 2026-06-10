@@ -329,7 +329,12 @@ class ExperimentLatticeRun:
         )
 
     def plot_run(
-        self, *, ax: None | Axes = None, aim_area: bool = False, scatter: bool = False
+        self,
+        *,
+        ax: None | Axes = None,
+        aim_area: bool = False,
+        scatter: bool = False,
+        steps: int = None,
     ) -> Axes:
         """Plot trajectories from this experiment run onto the raster.
 
@@ -359,15 +364,15 @@ class ExperimentLatticeRun:
                     traj_aim_df = traj.data[traj.data["Aim"] == 1]
                     traj_no_aim_df = traj.data[traj.data["Aim"] == 0]
                     ax.scatter(
-                        traj_aim_df["X"] - cw,
-                        traj_aim_df["Y"] - ch,
+                        traj_aim_df["X"][slice(steps)] - cw,
+                        traj_aim_df["Y"][slice(steps)] - ch,
                         s=0.001,
                         marker=".",
                         c="lightblue",
                     )
                     ax.scatter(
-                        traj_no_aim_df["X"] - cw,
-                        traj_no_aim_df["Y"] - ch,
+                        traj_no_aim_df["X"][slice(steps)] - cw,
+                        traj_no_aim_df["Y"][slice(steps)] - ch,
                         s=0.001,
                         marker=".",
                         c="green",
@@ -376,23 +381,31 @@ class ExperimentLatticeRun:
                 for traj in self.trajectories:
                     if scatter:
                         ax.scatter(
-                            traj.data["X"] - cw,
-                            traj.data["Y"] - ch,
+                            traj.data["X"][slice(steps)] - cw,
+                            traj.data["Y"][slice(steps)] - ch,
                             marker=".",
                             s=0.1,
                         )
                     else:
-                        ax.plot(traj.data["X"] - cw, traj.data["Y"] - ch, lw=0.3)
+                        ax.plot(
+                            traj.data["X"][slice(steps)] - cw,
+                            traj.data["Y"][slice(steps)] - ch,
+                            lw=0.3,
+                        )
         elif aim_area:
             for traj in self.trajectories:
                 traj_aim_df = traj.data[traj.data["Aim"] == 1]
                 traj_no_aim_df = traj.data[traj.data["Aim"] == 0]
                 ax.scatter(
-                    traj_aim_df["X"], traj_aim_df["Y"], marker=".", s=0.1, c="lightblue"
+                    traj_aim_df["X"][slice(steps)],
+                    traj_aim_df["Y"][slice(steps)],
+                    marker=".",
+                    s=0.1,
+                    c="lightblue",
                 )
                 ax.scatter(
-                    traj_no_aim_df["X"],
-                    traj_no_aim_df["Y"],
+                    traj_no_aim_df["X"][slice(steps)],
+                    traj_no_aim_df["Y"][slice(steps)],
                     marker=".",
                     s=0.1,
                     c="green",
@@ -401,13 +414,17 @@ class ExperimentLatticeRun:
             for traj in self.trajectories:
                 if scatter:
                     ax.scatter(
-                        traj.data["X"],
-                        traj.data["Y"],
+                        traj.data["X"][slice(steps)],
+                        traj.data["Y"][slice(steps)],
                         marker=".",
                         s=0.01,
                     )
                 else:
-                    ax.plot(traj.data["X"], traj.data["Y"], lw=0.3)
+                    ax.plot(
+                        traj.data["X"][slice(steps)],
+                        traj.data["Y"][slice(steps)],
+                        lw=0.3,
+                    )
         return ax
 
 
@@ -747,11 +764,11 @@ def spawn(
         flat_idx = np.flatnonzero(valid_mask.ravel())
         candidates = np.column_stack((flat_idx // w, flat_idx % w))
 
-    if len(candidates) < k:
-        msg = f"Not enough spawn points: {len(candidates)} available, {k} requested."
-        raise RuntimeError(msg)
+    # if len(candidates) < k:
+    #     msg = f"Not enough spawn points: {len(candidates)} available, {k} requested."
+    #     raise RuntimeError(msg)
 
-    idx = rng.choice(len(candidates), size=k, replace=False)
+    idx = rng.choice(len(candidates), size=k, replace=True)
     start_local = candidates[idx]
 
     return start_local + max_dim
@@ -1250,7 +1267,13 @@ class ExperimentLattice:
 
             self._config.has_ghost = True
 
-            self._config.start = tuple(np.array(self._config.start) + max_dim)
+            self._config.start = tuple(
+                np.array(self._config.start) + max_dim / self._config.lattice_resolution
+            )
+
+        self._config.dimensions = tuple(
+            np.array(self._config.dimensions) / self.config.lattice_resolution
+        )
 
         self.raster = np.flipud(raster)
         self.raster_chosen_obstacles = (
