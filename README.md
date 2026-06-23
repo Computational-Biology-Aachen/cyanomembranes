@@ -124,7 +124,7 @@ What it does:
 ### Step 3 — Analysis (`notebooks/analysis.ipynb `)
 
 What it does:
-- Runs simulations based on scenarios defined in scenario.py
+- Runs simulations based on scenarios defined in scenario.py (It is recommended just to uncomment the scenarios you want to simulate in scenario.py)
 - Saves results in output directory
 - Attention: Can take a long time depending on machine and available cores
 - Warning: Takes a lot of RAM. For machines wi RAM lower than 64 GB it is highly recommended to increase the save interval in the membrane_analysis/config.py file
@@ -135,6 +135,8 @@ What it does:
 
 What it does:
 - Assembles publication figures based on analysis output
+
+Some publication figures (especially the supplement can be found in the final output folders)
 
 ---
 

@@ -1,6 +1,7 @@
 from shapely import Point
 
-from membrane_analysis.config import AnalysisType, PlotRunsConfig, ScenarioConfig
+from membrane_analysis.config import (AnalysisType, PlotRunsConfig,
+                                      ScenarioConfig)
 
 # ----------------
 # DIFFUSION ANALYSES
@@ -82,7 +83,10 @@ no_md_fpt = ScenarioConfig(
     description=None,
     random_start_over_whole_membrane=False,  # means start around PSII
     number_of_proteins={
-        "avg_membrane": [10, 20, 30, 40, 50, 60, 70, 80, 90, 100],
+       "avg_membrane": [10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110],
+       "4H13-cytb6f": [10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
+       "PSII-cytbf": [10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 110]
+
     },
     cdegree=None,
     time_scale=1000.0,
@@ -144,6 +148,20 @@ big_md_fpt_coarse = ScenarioConfig(
     time_label="Time / ms",
     plot_runs=PlotRunsConfig(enabled=True, max_runs=1),
     lattice_resolution=10,
+)
+
+big_md_fpt_mv_sweep = ScenarioConfig(
+    name="big_MD_fpt_mv_sweep",
+    analysis_type=AnalysisType.FPT,
+    description=None,
+    random_start_over_whole_membrane=False,  # means start around PSII
+    number_of_proteins={"avg_membrane": [40, 60, 70]},
+    cdegree={"1JB0-PSI-syn-cocc": [0, 0.4]},
+    crystal_suffix="_crystal",
+    time_scale=1000.0,
+    time_label="Time / ms",
+    plot_runs=PlotRunsConfig(enabled=True, max_runs=1),
+    mv=[1.01, 1.3, 1.5]
 )
 
 
@@ -332,12 +350,13 @@ ALL_SCENARIOS = [
     # no_md_diff,
     # NO MD FPT
     # no_md_fpt_random_start,
-    # no_md_fpt,
+    no_md_fpt,
     # no_md_fpt_coarse,
     # FPT PSI
     # big_md_fpt_random_start,
-    big_md_fpt,
+    # big_md_fpt,
     # big_md_fpt_coarse
+    # big_md_fpt_mv_sweep,
     # small_md_fpt_random_start,
     # small_md_fpt,
     # RATE PSI

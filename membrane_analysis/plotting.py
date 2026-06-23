@@ -274,7 +274,7 @@ def _finalise_fpt_ax(ax1, scenario):
     ax1.set_ylabel("Reduced fraction %", fontsize=8)
     ax1.tick_params(labelsize=7)
     ax1.grid(True, linestyle=":", linewidth=0.5, alpha=0.5)  # noqa: FBT003
-    ax1.legend(loc="upper right")
+    ax1.legend(title="% in array", loc="upper right")
     for spines in ax1.spines.values():
         spines.set_linewidth(0.5)
 
@@ -373,7 +373,7 @@ def _plot_fpt_crystals(scenario, scalars, new_out, pic_out):
                         ax.plot(
                             ts_df["Time"] * scenario.time_scale,
                             ts_df["Active"],
-                            label=f"c%={row['cg']}",
+                            label=f"{int(row['cg']*100)}",
                             linewidth=2,
                             alpha=0.7,
                             color=color,
@@ -388,7 +388,7 @@ def _plot_fpt_crystals(scenario, scalars, new_out, pic_out):
                         )
 
                     ax.set_title(
-                        f"nprot={int(nprot)} - coverage = {coverage}",
+                        f"nprot={int(nprot)} - coverage = {int(coverage*100)}%",
                         fontsize=8,
                     )
                     _finalise_fpt_ax(ax, scenario)
@@ -542,7 +542,7 @@ def _plot_rate_constants(scenario, scalars, pic_out):
         color = next(color_iter)
         if scenario.cdegree is not None:
             crystal_prot, cg = group_key
-            label = f"{LABEL_DICT.get(crystal_prot, crystal_prot)}, c%={cg}"
+            label = f"{LABEL_DICT.get(crystal_prot, crystal_prot)}, {int(cg*100)}"
         else:
             label = LABEL_DICT.get(group_key, group_key)
 
@@ -560,7 +560,7 @@ def _plot_rate_constants(scenario, scalars, pic_out):
         ax.tick_params(labelsize=7)
         ax.spines["top"].set_visible(False)
         ax.spines["right"].set_visible(False)
-        ax.legend(loc="upper left", fontsize=7)
+        ax.legend(title="% in array", loc="upper left", fontsize=7)
         ax.tick_params(direction="in")
         fig.tight_layout()
         fig.savefig(pic_out / "rate_constant.png", dpi=300)
