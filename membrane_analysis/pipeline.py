@@ -259,7 +259,9 @@ def build_diffusion_metrics(
         source_files=[str(f) for f in condition.file_lst],
     )
 
-    timeseries = df[["Time", "MSD", "MSD_ci_low", "MSD_ci_high"]].copy()
+    timeseries = df[
+        ["Time", "MSD", "MSD_ci_low", "MSD_ci_high", "MAD", "MAD_ci_low", "MAD_ci_high"]
+    ].copy()
     timeseries["Sqrt_MSD"] = sqrt_msd
     timeseries["Norm_Diff_Dist"] = norm_diff_dist
     timeseries["Norm_Diff_Dist_ci_low"] = norm_diff_dist_ci_low
@@ -322,6 +324,8 @@ def _run_one_nprot(
     for condition in iterator:
         if len(condition.file_lst) == 0:
             print(f"No files for {condition.key}, skipping")
+
+        print(condition.file_lst)
 
         run = load_and_run(condition, exp_config)
         if run is None:

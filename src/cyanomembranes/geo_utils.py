@@ -945,6 +945,7 @@ def make_random_crystal_2d(
     regular: bool = False,
     constraint: None | Polygon = None,
     exclude_first: bool = False,
+    chaos: None | list[float] = None,
 ) -> list[Polygon]:
     seed = _translate_polygon(seed, 0, 0)
     seed_dop = get_dop(seed, k=16)
@@ -976,8 +977,21 @@ def make_random_crystal_2d(
             else:
                 direction, dist = random.choice(dir_dist)
 
-            dx, dy = direction * dist * max_variation
-            new_polygon = translate(fpoly, dx, dy)
+            if chaos:
+                dist_jitter = random.uniform(chaos[0], chaos[1])
+                max_angle_jitter = chaos[2] if len(chaos) > 2 else 30
+                theta = math.radians(
+                    random.uniform(-max_angle_jitter, max_angle_jitter)
+                )
+                cos_t, sin_t = math.cos(theta), math.sin(theta)
+                rot = np.array([[cos_t, -sin_t], [sin_t, cos_t]])
+                jittered_dir = rot @ direction
+                dx, dy = jittered_dir * dist * max_variation * dist_jitter
+                new_polygon = translate(fpoly, dx, dy)
+                new_polygon = rotate(new_polygon, random.uniform(0.0, 360.0))
+            else:
+                dx, dy = direction * dist * max_variation
+                new_polygon = translate(fpoly, dx, dy)
 
             tree = STRtree(placed)
             candidates = tree.query(new_polygon)

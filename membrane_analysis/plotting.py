@@ -171,8 +171,11 @@ def plot_diffusion(scenario, out_root):
             pass
 
         fig2, ax2 = plt.subplots(figsize=(6, 4))
+        fig3, ax3 = plt.subplots(figsize=(6, 4))
         norm = colors.Normalize(vmin=min(nprot), vmax=max(nprot))
         cmap = mlp.colormaps["viridis"]
+
+        MAD_indicator = -1000
 
         for _idx, row in current_prot.iterrows():
             n = row.nprot
@@ -196,6 +199,21 @@ def plot_diffusion(scenario, out_root):
                 color=ax2.lines[-1].get_color(),
             )
 
+            if "MAD" in ts_df.columns:
+                ax3.plot(
+                    ts_df["Sqrt_MSD"],
+                    ts_df["MAD"]
+                    / ts_df[
+                        "Sqrt_MSD"
+                    ],  # in empty surfaces (2D) Rayleigh-distribution coefficient
+                    label=f"r = {coverage:.2f}%",
+                    linewidth=2,
+                    alpha=0.7,
+                    color=current_color2,
+                )
+
+                MAD_indicator = 1293
+
         ax2.set_xlabel(r"$\langle r \rangle$ (Å)", fontsize=12)
         ax2.set_ylabel(r"$D(r) / D_0$", fontsize=12)
         ax2.tick_params(labelsize=10)
@@ -207,6 +225,19 @@ def plot_diffusion(scenario, out_root):
         fig2.tight_layout()
         fig2.savefig(pic_out / f"membrane_diffusion_{pkey}.png", dpi=300)
         plt.close(fig2)
+
+        if MAD_indicator == 1293:
+            ax3.set_ylabel(r"$\sqrt{\mathrm{MSD}}/\mathrm{MAD}$", fontsize=12)
+            # ax3.set_xlabel(scenario.time_label, fontsize=12)
+            ax3.set_xlabel(r"$\sqrt{\mathrm{MSD}} / \mathrm{\AA}$", fontsize=12)
+            ax3.tick_params(labelsize=10)
+            ax3.grid(True, linestyle=":", linewidth=0.5, alpha=0.5)  # noqa: FBT003
+            ax3.legend(loc="lower right")
+            for spines in ax3.spines.values():
+                spines.set_linewidth(0.5)
+            fig3.tight_layout()
+            fig3.savefig(pic_out / f"mad_sqrtmsd_ratio_{pkey}.png", dpi=300)
+        plt.close(fig3)
 
     fig1.tight_layout()
     axes1[1].set_xlabel("% Coverage", fontsize=8)
@@ -272,10 +303,21 @@ def plot_3d_fpt(Active_df, scenario):
 def _finalise_fpt_ax(ax1, scenario):
     ax1.set_xlabel(scenario.time_label, fontsize=8)
     ax1.set_ylabel("Reduced fraction %", fontsize=8)
+    ax1.set_ylim(0.0, 1.0)
     ax1.tick_params(labelsize=7)
     ax1.grid(True, linestyle=":", linewidth=0.5, alpha=0.5)  # noqa: FBT003
     ax1.legend(title="% in array", loc="upper right")
     for spines in ax1.spines.values():
+        spines.set_linewidth(0.5)
+
+
+def _finalise_fpt_ax2(ax2, scenario):
+    ax2.set_xlabel("% in array", fontsize=8)
+    ax2.set_ylabel(f"Mean first encounter time / [{scenario.time_label}]", fontsize=8)
+    ax2.set_ylim(0.01, 0.025)
+    ax2.tick_params(labelsize=7)
+    ax2.grid(True, linestyle=":", linewidth=0.5, alpha=0.5)  # noqa: FBT003
+    for spines in ax2.spines.values():
         spines.set_linewidth(0.5)
 
 
@@ -356,16 +398,40 @@ def _plot_fpt_crystals(scenario, scalars, new_out, pic_out):
                     1, n_panels, figsize=(3 * n_panels, 3), sharey=False
                 )
 
+                fig2, axes2 = plt.subplots(
+                    1, n_panels, figsize=(3 * n_panels, 3), sharey=False
+                )
+
                 if n_panels == 1:
                     axes = [axes]
+                    axes2 = [axes2]
 
-                for ax, nprot in zip(axes, nprot_lst):
+                for ax, ax2, nprot in zip(axes, axes2, nprot_lst):
                     nprot_rows = subset[subset["nprot"] == nprot]
                     coverage = nprot_rows["mean_coverage"].round(3).unique()[0]
                     color_iter = iter(COLORBLIND_PALETTE)
 
                     for _, row in nprot_rows.sort_values("cg").iterrows():
+
                         color = next(color_iter)
+
+                        low = row["first_inactive_time_ci_low"] * scenario.time_scale
+                        high = row["first_inactive_time_ci_high"] * scenario.time_scale
+                        y = row["first_inactive_time"] * scenario.time_scale
+
+                        yerr = [[y - low], [high - y]]
+
+                        ax2.errorbar(
+                            row["cg"],
+                            y,
+                            yerr=yerr,
+                            fmt="o",
+                            color=color,
+                            ecolor=color,
+                            elinewidth=1,
+                            capsize=3,
+                        )
+
                         ts_df = pd.read_csv(
                             new_out / "timeseries" / _timeseries_filename_from_row(row)
                         )
@@ -392,6 +458,13 @@ def _plot_fpt_crystals(scenario, scalars, new_out, pic_out):
                         fontsize=8,
                     )
                     _finalise_fpt_ax(ax, scenario)
+
+                    ax2.set_title(
+                        f"nprot={int(nprot)} - coverage = {int(coverage*100)}%",
+                        fontsize=8,
+                    )
+                    _finalise_fpt_ax2(ax2, scenario)
+
                 fig.suptitle(
                     f"{LABEL_DICT.get(pkey, pkey)}-"
                     f"{LABEL_DICT.get(crystal_prot, crystal_prot)}, "
@@ -401,6 +474,18 @@ def _plot_fpt_crystals(scenario, scalars, new_out, pic_out):
                 fig.tight_layout()
                 fig.savefig(
                     pic_out / f"membrane_fpt_{pkey}_{crystal_prot}_mv{mv}.png", dpi=400
+                )
+
+                fig2.suptitle(
+                    f"{LABEL_DICT.get(pkey, pkey)}-"
+                    f"{LABEL_DICT.get(crystal_prot, crystal_prot)}, "
+                    rf"$\delta$={mv}",
+                    fontsize=9,
+                )
+                fig2.tight_layout()
+                fig2.savefig(
+                    pic_out / f"membrane_fpt_scatter_{pkey}_{crystal_prot}_mv{mv}.png",
+                    dpi=400,
                 )
 
 

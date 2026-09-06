@@ -118,6 +118,11 @@ class ScenarioConfig:
     # --- fully_crystal ----
     fully_crystal: bool = False
 
+    # --- membranesize ---
+    membrane_size: Optional[tuple[int, int]] = (
+        None  # assume 5000 to be the standars (see make_exp_config)
+    )
+
     plot_runs: PlotRunsConfig = field(default_factory=PlotRunsConfig)
 
 
@@ -140,7 +145,9 @@ def make_exp_config(
     cfg.replicates = 3000
     cfg.diff_coefficient = 3.5e9  # Å²/s == 3.5×10⁻⁷ cm²/s
     cfg.particle_radius = 5
-    cfg.dimensions = (0, 5000)
+    cfg.dimensions = (
+        scenario.membrane_size if scenario.membrane_size is not None else (0, 5000)
+    )
     cfg.random_start = True
     cfg.has_ghost = True
     cfg.store_history = False

@@ -23,6 +23,23 @@ no_md_diff_random_start = ScenarioConfig(
     plot_runs=PlotRunsConfig(enabled=True, max_runs=1),
 )
 
+no_md_diff_random_start_2_mad = ScenarioConfig(
+    name="no_MD_diff_random_start_2_mad",
+    analysis_type=AnalysisType.DIFFUSION,
+    description=None,
+    random_start_over_whole_membrane=True,
+    number_of_proteins={
+        # "3WU2-PSII-ThermosynVul": [100, 200, 300, 400, 500, 600, 700, 800, 900],
+        # "4H13-cytb6f": [100, 200, 300, 400, 500, 600, 700, 800, 900, 1100, 1400],
+        # "1JB0-PSI-syn-cocc": [100, 200, 300, 400, 500],
+        "avg_membrane": [10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110],
+    },
+    cdegree=None,
+    time_scale=1000.0,
+    time_label="Time / ms",
+    plot_runs=PlotRunsConfig(enabled=True, max_runs=1),
+)
+
 no_md_diff_random_start_coarse = ScenarioConfig(
     name="no_MD_diff_random_start_coarse",
     analysis_type=AnalysisType.DIFFUSION,
@@ -123,6 +140,99 @@ big_md_fpt_random_start = ScenarioConfig(
 
 big_md_fpt = ScenarioConfig(
     name="big_MD_fpt",
+    analysis_type=AnalysisType.FPT,
+    description=None,
+    random_start_over_whole_membrane=False,  # means start around PSII
+    number_of_proteins={"avg_membrane": [40, 60, 80]},
+    cdegree={"1JB0-PSI-syn-cocc": [0, 0.4, 0.8]},
+    crystal_suffix="_crystal",
+    time_scale=1000.0,
+    time_label="Time / ms",
+    plot_runs=PlotRunsConfig(enabled=True, max_runs=1),
+)
+
+big_md_fpt_chaos091015 = ScenarioConfig(
+    name="big_MD_fpt_chaos091015",
+    analysis_type=AnalysisType.FPT,
+    description=None,
+    random_start_over_whole_membrane=False,  # means start around PSII
+    number_of_proteins={"avg_membrane": [40, 60, 80]},
+    cdegree={"1JB0-PSI-syn-cocc": [0, 0.4, 0.8]},
+    crystal_suffix="_crystal_chaos0.9-1.0-15",
+    time_scale=1000.0,
+    time_label="Time / ms",
+    plot_runs=PlotRunsConfig(enabled=True, max_runs=1),
+)
+
+big_md_fpt_chaos0951007 = ScenarioConfig(
+    name="big_MD_fpt_chaos0951007 ",
+    analysis_type=AnalysisType.FPT,
+    description=None,
+    random_start_over_whole_membrane=False,  # means start around PSII
+    number_of_proteins={"avg_membrane": [40, 60, 80]},
+    cdegree={"1JB0-PSI-syn-cocc": [0, 0.4, 0.8]},
+    crystal_suffix="_crystal_chaos0.95-1.0-7",
+    time_scale=1000.0,
+    time_label="Time / ms",
+    plot_runs=PlotRunsConfig(enabled=True, max_runs=1),
+)
+
+big_md_fpt_chaos101000 = ScenarioConfig(
+    name="big_MD_fpt_chaos101000",
+    analysis_type=AnalysisType.FPT,
+    description=None,
+    random_start_over_whole_membrane=False,  # means start around PSII
+    number_of_proteins={"avg_membrane": [40, 60, 80]},
+    cdegree={"1JB0-PSI-syn-cocc": [0, 0.4, 0.8]},
+    crystal_suffix="_crystal_chaos1.0-1.0-0.0",
+    time_scale=1000.0,
+    time_label="Time / ms",
+    plot_runs=PlotRunsConfig(enabled=True, max_runs=1),
+)
+
+big_md_fpt_membranesize2500 = ScenarioConfig(
+    name="big_MD_fpt_membranesize2500",
+    analysis_type=AnalysisType.FPT,
+    description=None,
+    random_start_over_whole_membrane=False,  # means start around PSII
+    number_of_proteins={"avg_membrane": [10, 15, 21]},
+    cdegree={"1JB0-PSI-syn-cocc": [0, 0.4, 0.8]},
+    crystal_suffix="_crystal_membranesize2500",
+    time_scale=1000.0,
+    time_label="Time / ms",
+    plot_runs=PlotRunsConfig(enabled=True, max_runs=1),
+    membrane_size=(0, 2500),
+)
+
+big_md_fpt_membranesize3000 = ScenarioConfig(
+    name="big_MD_fpt_membranesize3000",
+    analysis_type=AnalysisType.FPT,
+    description=None,
+    random_start_over_whole_membrane=False,  # means start around PSII
+    number_of_proteins={"avg_membrane": [10, 20, 30]},
+    cdegree={"1JB0-PSI-syn-cocc": [0, 0.4, 0.8]},
+    crystal_suffix="_crystal_membranesize3000",
+    time_scale=1000.0,
+    time_label="Time / ms",
+    plot_runs=PlotRunsConfig(enabled=True, max_runs=1),
+    membrane_size=(0, 3000),
+)
+
+big_md_fpt_chaos091015_membransize2500 = ScenarioConfig(
+    name="big_MD_fpt_chaos091015_membranesize2500",
+    analysis_type=AnalysisType.FPT,
+    description=None,
+    random_start_over_whole_membrane=False,  # means start around PSII
+    number_of_proteins={"avg_membrane": [10, 15, 21]},
+    cdegree={"1JB0-PSI-syn-cocc": [0, 0.4, 0.8]},
+    crystal_suffix="_crystal_chaos0.9-1.0-15_membranesize2500",
+    time_scale=1000.0,
+    time_label="Time / ms",
+    plot_runs=PlotRunsConfig(enabled=True, max_runs=1),
+)
+
+big_md_fpt_test2 = ScenarioConfig(
+    name="big_MD_fpt_test2",
     analysis_type=AnalysisType.FPT,
     description=None,
     random_start_over_whole_membrane=False,  # means start around PSII
@@ -344,6 +454,8 @@ crystal_analysis = ScenarioConfig(
 ALL_SCENARIOS = [
     # Diffusion
     # no_md_diff_random_start,
+    # big_md_fpt_chaos091015,
+    # no_md_diff_random_start_2_mad
     # no_md_diff_random_start_coarse
     # no_md_diff,
     # NO MD FPT
@@ -353,6 +465,13 @@ ALL_SCENARIOS = [
     # FPT PSI
     # big_md_fpt_random_start,
     # big_md_fpt,
+    # big_md_fpt_chaos091015,
+    # big_md_fpt_chaos0951007
+    big_md_fpt_chaos101000,
+    # big_md_fpt_membranesize2500,
+    # big_md_fpt_chaos091015_membransize2500
+    # big_md_fpt_membranesize3000,
+    # big_md_fpt_test2
     # big_md_fpt_coarse
     # big_md_fpt_mv_sweep,
     # small_md_fpt_random_start,

@@ -239,7 +239,7 @@ class ExperimentLatticeRun:
         df_all = [t.data.copy() for t in self.trajectories]
         groups = df_all[0][group_by].to_numpy()
         n_traj = len(df_all)
-        metrics = ["MSD", "Active"]
+        metrics = ["MSD", "Active", "MAD"]
         if "Aim" in df_all[0].columns:
             metrics.append("Aim")
 
@@ -937,6 +937,7 @@ def random_walk_2d_lattice(
         ai_hist = None
 
     msd = np.zeros((n_saved, nreps), dtype=np.uint32)
+    mad = np.zeros((n_saved, nreps), dtype=np.uint32)
     active = np.zeros((n_saved, nreps), dtype=np.uint8)
 
     # Particle / obstacle helpers
@@ -961,6 +962,7 @@ def random_walk_2d_lattice(
     # Save t = 0
     save_idx = 0
     msd[0] = np.sum((pos - start_pos) ** 2, axis=1)
+    mad[0] = np.sqrt(np.sum((pos - start_pos) ** 2, axis=1))
     active[0] = active_t
     save_idx = 1
 
@@ -1021,6 +1023,7 @@ def random_walk_2d_lattice(
         # MSD
         disp = pos - start_pos
         msd_t = np.sum(disp**2, axis=1)
+        mad_t = np.sqrt(np.sum(disp**2, axis=1))
 
         # Save
         if save_idx < n_saved and t == saved_times[save_idx]:
@@ -1031,6 +1034,7 @@ def random_walk_2d_lattice(
                 ai_hist[save_idx] = aim_mask[pos[:, 0], pos[:, 1]]
 
             msd[save_idx] = msd_t
+            mad[save_idx] = mad_t
             active[save_idx] = active_t
 
             if use_chosen and hits is not None and hits_buffer is not None:
@@ -1051,6 +1055,7 @@ def random_walk_2d_lattice(
                 "Y": pos_hist[:, :, 0].ravel(),
                 "X": pos_hist[:, :, 1].ravel(),
                 "MSD": msd.ravel(),
+                "MAD": mad.ravel(),
                 "Active": active.ravel(),
             }
         )
@@ -1063,6 +1068,7 @@ def random_walk_2d_lattice(
                 "Time": np.repeat(time_vec, nreps),
                 "Replicate": np.tile(np.arange(nreps), n_saved),
                 "MSD": msd.ravel(),
+                "MAD": msd.ravel(),
                 "Active": active.ravel(),
             }
         )
