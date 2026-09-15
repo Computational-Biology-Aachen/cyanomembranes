@@ -14,6 +14,7 @@ import numpy as np
 import pandas as pd
 import shapely.vectorized as sv
 import shapely.wkt
+import multiprocessing as mp
 from scipy.ndimage import binary_erosion
 from shapely import Polygon
 from shapely.affinity import translate
@@ -1510,7 +1511,9 @@ class EnsembleExperimentLattice:
         ensemble_lst = []
         coverage_lst = []
 
-        with ProcessPoolExecutor(max_workers=self.config.workers) as pool:
+        ctx = mp.get_context("spawn")
+
+        with ProcessPoolExecutor(max_workers=self.config.workers, mp_context=ctx) as pool:
             futures = [
                 pool.submit(_run_single_lattice_experiment, wkt_list, config_dict)
                 for wkt_list in all_wkt_lists

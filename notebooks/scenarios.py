@@ -453,21 +453,21 @@ crystal_analysis = ScenarioConfig(
 
 ALL_SCENARIOS = [
     # Diffusion
-    # no_md_diff_random_start,
+    no_md_diff_random_start,
     # big_md_fpt_chaos091015,
     # no_md_diff_random_start_2_mad
     # no_md_diff_random_start_coarse
     # no_md_diff,
     # NO MD FPT
     # no_md_fpt_random_start,
-    # no_md_fpt,
+    no_md_fpt,
     # no_md_fpt_coarse,
     # FPT PSI
     # big_md_fpt_random_start,
-    # big_md_fpt,
+    big_md_fpt,
     # big_md_fpt_chaos091015,
     # big_md_fpt_chaos0951007
-    big_md_fpt_chaos101000,
+    # big_md_fpt_chaos101000,
     # big_md_fpt_membranesize2500,
     # big_md_fpt_chaos091015_membransize2500
     # big_md_fpt_membranesize3000,
@@ -477,7 +477,7 @@ ALL_SCENARIOS = [
     # small_md_fpt_random_start,
     # small_md_fpt,
     # RATE PSI
-    # big_md_rate,
+    big_md_rate,
     # big_md_rate_coarse,
     # small_md_rate,
     # FPT PSII
@@ -489,5 +489,5 @@ ALL_SCENARIOS = [
     # big_md_rate_PSII,
     # small_md_rate_PSII,
     # CRYSTALS
-    # crystal_analysis
+    crystal_analysis
 ]
