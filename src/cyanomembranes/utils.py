@@ -10,6 +10,7 @@ import numpy.typing as npt
 type XY = npt.NDArray[np.float64]
 type XYZ = npt.NDArray[np.float64]
 
+
 def float2d(x: list[float]) -> np.ndarray:
     return np.array(x, dtype=float)
 

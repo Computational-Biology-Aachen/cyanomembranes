@@ -115,6 +115,9 @@ class ScenarioConfig:
     # --- Lattice resolution ---
     lattice_resolution: Optional[int] = None
 
+    # --- Coordinate Wrapping ---
+    wrap: bool = False
+
     # --- fully_crystal ----
     fully_crystal: bool = False
 
@@ -152,6 +155,7 @@ def make_exp_config(
     cfg.has_ghost = True
     cfg.store_history = False
     cfg.workers = n_processes
+    cfg.wrap = scenario.wrap
 
     # --- Analysis-type-specific parameters
     if scenario.analysis_type == AnalysisType.FPT:

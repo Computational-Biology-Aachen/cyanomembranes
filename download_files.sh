@@ -14,4 +14,3 @@ wget -q --show-progress -O "data_cyano/4H13-cytb6f.trpdb" "${PDBTM}/4h13.trpdb"
 wget -q --show-progress -O "data_cyano/1OCO-cytoxidase-bov.trpdb" "${PDBTM}/1oco.trpdb"
 wget -q --show-progress -O "data_cyano/1xl4-Kchannel-Pmagnetotacticum.trpdb" "${PDBTM}/1xl4.trpdb"
 wget -q --show-progress -O "data_cyano/4HEA-NDH1-thermo.trpdb" "${PDBTM}/4hea.trpdb"
-

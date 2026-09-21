@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import dataclasses
 import math
+import multiprocessing as mp
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from copy import deepcopy
 from dataclasses import dataclass
@@ -14,7 +15,6 @@ import numpy as np
 import pandas as pd
 import shapely.vectorized as sv
 import shapely.wkt
-import multiprocessing as mp
 from scipy.ndimage import binary_erosion
 from shapely import Polygon
 from shapely.affinity import translate
@@ -827,6 +827,10 @@ def spawn(
     return start_local + max_dim
 
 
+def _wrap_positions(pos: np.ndarray, offset: int, size: int) -> np.ndarray:
+    return ((pos - offset) % size) + offset
+
+
 def random_walk_2d_lattice(
     raster: np.ndarray,
     nsteps: int = 10_000,
@@ -848,6 +852,7 @@ def random_walk_2d_lattice(
     has_ghost: bool = False,
     random_start: bool = False,
     steady_state_chosen_obstacle: bool = False,
+    wrap: bool = False,
 ) -> dict:
     """Simulate multiple 2D random-walk trajectories on a lattice raster.
 
@@ -917,9 +922,14 @@ def random_walk_2d_lattice(
     dt = a**2 / (4 * diff_coefficient)
     directions = np.array(_get_lattice_directions("square"), dtype=np.int32)
 
+    _, max_dim = dimensions
+    box_size = int(max_dim)
+    offset = box_size if has_ghost else 0
+
     # Initial position
     pos = start.astype(np.int32)
     start_pos = pos.copy()
+    wrap_shift = np.zeros_like(pos)
 
     # Saving setup
     saved_times = np.arange(0, nsteps + 1, save_every, dtype=np.int32)
@@ -962,8 +972,9 @@ def random_walk_2d_lattice(
 
     # Save t = 0
     save_idx = 0
-    msd[0] = np.sum((pos - start_pos) ** 2, axis=1)
-    mad[0] = np.sqrt(np.sum((pos - start_pos) ** 2, axis=1))
+    disp0 = (pos + wrap_shift) - start_pos
+    msd[0] = np.sum(disp0**2, axis=1)
+    mad[0] = np.sqrt(np.sum(disp0**2, axis=1))
     active[0] = active_t
     save_idx = 1
 
@@ -971,7 +982,14 @@ def random_walk_2d_lattice(
     for t in trange(1, nsteps + 1):
         move_idx = rng.integers(0, 4, size=nreps)
         step = directions[move_idx]
-        new_pos = pos + step
+        new_pos_raw = pos + step
+
+        if wrap:
+            new_pos = _wrap_positions(new_pos_raw, offset, box_size)
+            step_correction = new_pos_raw - new_pos
+        else:
+            new_pos = new_pos_raw
+            step_correction = None
 
         # Free-space check
 
@@ -1012,6 +1030,8 @@ def random_walk_2d_lattice(
                         has_ghost=has_ghost,
                     )
                     pos[mask_hit_chosen] = respawned_pos
+                    if wrap:
+                        wrap_shift[mask_hit_chosen] = 0
                     active_t[mask_hit_chosen] = True
 
             else:
@@ -1019,10 +1039,12 @@ def random_walk_2d_lattice(
 
         # Update position
         mask_move = mask_free & active_t
+        if wrap and step_correction is not None:
+            wrap_shift[mask_move] += step_correction[mask_move]
         pos[mask_move] = new_pos[mask_move]
 
         # MSD
-        disp = pos - start_pos
+        disp = (pos + wrap_shift) - start_pos
         msd_t = np.sum(disp**2, axis=1)
         mad_t = np.sqrt(np.sum(disp**2, axis=1))
 
@@ -1141,6 +1163,7 @@ class ExperimentLatticeConfig:
     save_every: int = 1
     shift_origin: bool = False
     steady_state_chosen_obstacle: bool = False
+    wrap: bool = False
     workers: None | int = 4
     rng: None | np.random.Generator = None
 
@@ -1422,6 +1445,7 @@ class ExperimentLattice:
             has_ghost=self._config.has_ghost,
             random_start=self._config.random_start,
             steady_state_chosen_obstacle=self._config.steady_state_chosen_obstacle,
+            wrap=self._config.wrap,
         )
 
         runs = res["traj"]
@@ -1513,7 +1537,9 @@ class EnsembleExperimentLattice:
 
         ctx = mp.get_context("spawn")
 
-        with ProcessPoolExecutor(max_workers=self.config.workers, mp_context=ctx) as pool:
+        with ProcessPoolExecutor(
+            max_workers=self.config.workers, mp_context=ctx
+        ) as pool:
             futures = [
                 pool.submit(_run_single_lattice_experiment, wkt_list, config_dict)
                 for wkt_list in all_wkt_lists

@@ -20,7 +20,7 @@
 
 ## Overview
 
-Spatial heterogeneity in cyanobacterial thylakoid membranes has been observed. However, it is not fully clear how spatial organization forms and what purpose it serves. This project uses computational membranes and lattice diffusion to investigate how the formation of pigment-protein microdomains and crystalline arrays affect the movement within the cyanobacterial thylakoid membrane.
+Spatial heterogeneity in cyanobacterial thylakoid membranes has been observed. However, it is not fully clear how spatial organization forms and what purpose it serves. This project uses computational membranes and lattice diffusion to investigate how the formation of pigment-protein microdomains (disordered arrangements or crystalline arrays) affect the movement within the cyanobacterial thylakoid membrane.
 
 ---
 
@@ -95,7 +95,7 @@ Protein structure files are downloaded from OMP (https://opm.phar.umich.edu/) or
 
 ```bash
 # Example: download with curl or a dedicated script
-bash src/download_data.sh
+bash src/download_files.sh
 ```
 
 ---
@@ -127,11 +127,18 @@ What it does:
 - Runs simulations based on scenarios defined in scenario.py (It is recommended just to uncomment the scenarios you want to simulate in scenario.py)
 - Saves results in output directory
 - Attention: Can take a long time depending on machine and available cores
-- Warning: Takes a lot of RAM. For machines wi RAM lower than 64 GB it is highly recommended to increase the save interval in the membrane_analysis/config.py file
+- Warning: Takes a lot of RAM. For machines wi RAM lower than 64 GB it is highly recommended to decrease the save interval in the membrane_analysis/config.py file
 
 ---
 
-### Step 4 — Create publication figures (`notebooks/make_figures.ipynb `)
+### Step 4 — Crystal Analysis (`notebooks/crystal_analysis.ipynb `)
+
+What it does:
+- Simulate crystal escape analysis. (Temporary fix) Currenly implemented like this since plotting of the "AIM" analysis is not yet included in the pipeline.
+
+---
+
+### Step 5 — Create publication figures (`notebooks/make_figures.ipynb `)
 
 What it does:
 - Assembles publication figures based on analysis output
@@ -168,7 +175,7 @@ If you use this code or data, please cite:
 ## License
 
 Code: [](LICENSE)
-Data: [](https://creativecommons.org/licenses/by/4.0/) *(adjust as appropriate)*
+Data: [](https://creativecommons.org/licenses/by/4.0/)
 
 ---
 
