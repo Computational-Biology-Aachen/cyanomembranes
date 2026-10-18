@@ -21,8 +21,7 @@ from shapely.affinity import translate
 from shapely.geometry import box
 from shapely.ops import unary_union
 from sklearn.linear_model import LinearRegression
-from tqdm import tqdm
-from tqdm.notebook import trange
+from tqdm import tqdm, trange
 
 from cyanomembranes.geo_utils import _get_lattice_directions, make_raster, readwkt
 

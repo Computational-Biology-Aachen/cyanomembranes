@@ -49,7 +49,6 @@ Spatial heterogeneity in cyanobacterial thylakoid membranes has been observed. H
 ├── src
 │   └── cyanomembranes
 │       ├── brownian_lattice.py
-│       ├── brownian.py
 │       ├── geo_algorithms.py
 │       ├── geo_utils.py
 │       ├── __init__.py
