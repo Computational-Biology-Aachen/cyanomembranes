@@ -19,7 +19,7 @@ import random
 import warnings
 from copy import deepcopy
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any, Literal, cast
 
 import numpy as np
 from affine import Affine
@@ -365,12 +365,12 @@ def readwkt(filepath: Path) -> list[Polygon]:
     list[Polygon]
         List of polygons read from the file.
     """
-    polygons = []
+    polygons: list[Polygon] = []
     with Path.open(filepath, "r", encoding="utf-8") as file:
         for line in file:
             stripped_line = line.strip()
             if stripped_line:
-                geom = wkt.loads(stripped_line)
+                geom = cast(Polygon, wkt.loads(stripped_line))
                 polygons.append(geom)
     return polygons
 
@@ -889,7 +889,7 @@ def placement_routine(
     """
     direction = np.array([0, 0]) if direction is None else direction
 
-    not_placed = []
+    not_placed: list[Polygon] = []
     placed_positions = []
     for i in range(max_iter_placement):
         logger.info("PLACEMENT ROUND %s", i + 1)

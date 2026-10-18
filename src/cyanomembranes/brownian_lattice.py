@@ -34,8 +34,11 @@ if TYPE_CHECKING:
 
 
 def get_buffered_shapes(
-    comparison_size: float, shapes: list, buffer: float, constraint_area: Polygon
-) -> list[Polygon]:
+    comparison_size: float,
+    shapes: Sequence[BaseGeometry],
+    buffer: float,
+    constraint_area: Polygon,
+) -> list[BaseGeometry]:
     """Selects shapes whose area matches a comparison size and intersect a
     constraint area, then returns the buffered ring around each selected shape.
 
@@ -64,8 +67,8 @@ def get_buffered_shapes(
 
     Returns
     -------
-    list[Polygon]
-        A list of Shapely ``Polygon`` objects, each representing the buffered
+    list[BaseGeometry]
+        A list of Shapely geometries, each representing the buffered
         ring (i.e. ``shape.buffer(buffer).difference(shape)``) of a qualifying
         input shape. Returns an empty list if no shapes meet both criteria.
     """
@@ -386,7 +389,7 @@ class ExperimentLatticeRun:
         ax: None | Axes = None,
         aim_area: bool = False,
         scatter: bool = False,
-        steps: int = None,
+        steps: int | None = None,
     ) -> Axes:
         """Plot trajectories from this experiment run onto the raster.
 
@@ -514,7 +517,9 @@ class EnsembleExperimentLatticeRun:
         run_all = [r.mean_trajectories().copy() for r in self.runs]
         value_cols = [c for c in run_all[0] if c not in [group_by, "run_id"]]
         value_cols = [
-            c for c in value_cols if not any(sub in c for sub in ["ci", "std", "sem"])
+            c
+            for c in value_cols
+            if not any(sub in str(c) for sub in ["ci", "std", "sem"])
         ]
         groups = run_all[0][group_by].to_numpy()
         n_run = len(run_all)
@@ -1002,6 +1007,9 @@ def random_walk_2d_lattice(
                 mask_free_obs = check_local_free2(free_raster_chosen_obstacles, new_pos)
                 mask_hit_chosen = ~mask_free_obs
             else:
+                if raster_chosen_obstacles is None:
+                    msg = "raster_chosen_obstacles is required when use_chosen is set"
+                    raise ValueError(msg)
                 mask_hit_chosen = (
                     raster_chosen_obstacles[new_pos[:, 0], new_pos[:, 1]] == 1
                 )
@@ -1153,7 +1161,7 @@ class ExperimentLatticeConfig:
     coverage_dimension: tuple[float, float] | None = None
     random_start: bool = False
     aim_area: None | Polygon = None
-    start_area: None | Polygon = None
+    start_area: None | BaseGeometry = None
     start_area_by_size: None | tuple = None
     chosen_obstacles_by_area: float | None = None
     particle_radius: None | int = None
@@ -1197,6 +1205,9 @@ class ExperimentLattice:
 
         if self._config.start_area_by_size:
             comparison_size, buffer, constraint_area = self._config.start_area_by_size
+            if self._config.shapes is None:
+                msg = "start_area_by_size requires shapes"
+                raise ValueError(msg)
             shapes = get_buffered_shapes(
                 comparison_size=comparison_size,
                 shapes=self._config.shapes,
@@ -1219,8 +1230,8 @@ class ExperimentLattice:
             sx, sy = self._config.start
             self._config.start = (int(sx + max_dim / 2), int(sy + max_dim / 2))
         min_dim, max_dim = self._config.dimensions
-        min_dim_cov = min_dim
-        max_dim_cov = max_dim
+        min_dim_cov: float = min_dim
+        max_dim_cov: float = max_dim
         union_shapes = unary_union(self._config.shapes)
         workspace = box(min_dim, min_dim, max_dim, max_dim)
         if self._config.coverage_dimension:
@@ -1241,13 +1252,13 @@ class ExperimentLattice:
             )
 
             if self._config.chosen_obstacles_by_area:
-                shapes = self._config.shapes
-                if not shapes:
+                config_shapes = self._config.shapes
+                if not config_shapes:
                     msg = "Cannot choose obstacle by area from empty shapes"
                     raise ValueError(msg)
                 chosen_particles_by_area = [
                     i
-                    for i in shapes
+                    for i in config_shapes
                     if math.isclose(i.area, self._config.chosen_obstacles_by_area)
                 ]
                 raster_chosen_obstacles = make_raster(
@@ -1283,13 +1294,13 @@ class ExperimentLattice:
             )  # type: ignore
 
             if self._config.chosen_obstacles_by_area:
-                shapes = self._config.shapes
-                if not shapes:
+                config_shapes = self._config.shapes
+                if not config_shapes:
                     msg = "Cannot choose obstacle by area from empty shapes"
                     raise ValueError(msg)
                 chosen_particles_by_area = [
                     i
-                    for i in shapes
+                    for i in config_shapes
                     if math.isclose(i.area, self._config.chosen_obstacles_by_area)
                 ]
 
@@ -1340,7 +1351,7 @@ class ExperimentLattice:
                 self.aim_area = None
 
             if self._config.start_area is not None:
-                self.start_area = translate(
+                self.start_area: BaseGeometry | None = translate(
                     self._config.start_area, xoff=max_dim, yoff=max_dim
                 )
             else:
@@ -1366,7 +1377,7 @@ class ExperimentLattice:
         self.start_mask = np.flipud(start_mask) if start_mask is not None else None
 
         if self.aim_area is not None:
-            self.aim_mask = make_aim_mask(
+            self.aim_mask: np.ndarray | None = make_aim_mask(
                 self.raster,
                 self.aim_area,
                 lattice_resolution=self._config.lattice_resolution,
@@ -1485,7 +1496,7 @@ class ExperimentLattice:
 
 
 def _run_single_lattice_experiment(
-    shapes_wkt: str, config_dict: dict
+    shapes_wkt: list[str], config_dict: dict
 ) -> tuple[ExperimentLatticeRun, float]:
     polygons = [shapely.wkt.loads(w) for w in shapes_wkt]
     cfg = ExperimentLatticeConfig(**config_dict)

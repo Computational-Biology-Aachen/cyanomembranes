@@ -184,9 +184,9 @@ def make_polygon(
         projection = np.dot(coords - support_vector, viewing_axis) * viewing_axis
         projected_coords.append(coords - projection)
 
-    projected_coords = np.array(projected_coords)
+    projected_coords_array = np.array(projected_coords)
 
-    Point_lst = [Point(p[0], p[1]) for p in projected_coords]
+    Point_lst = [Point(p[0], p[1]) for p in projected_coords_array]
 
     concave_hull, edge_points = geo_algorithms.alpha_shape(
         Point_lst, alpha=0.3
@@ -198,7 +198,7 @@ def make_polygon(
         with out_file.open("w") as f:
             f.write(concave_hull.wkt)
 
-    return projected_coords, edge_points, concave_hull
+    return projected_coords_array, edge_points, concave_hull
 
 
 def process_proteins(in_path: Path, out_path: Path, pdb_files: list[str]) -> dict:
