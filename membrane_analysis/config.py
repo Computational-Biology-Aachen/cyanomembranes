@@ -3,7 +3,6 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from enum import Enum, auto
 from pathlib import Path
-from typing import Optional
 
 from shapely.geometry import box
 
@@ -65,8 +64,8 @@ class Condition:
 @dataclass
 class PlotRunsConfig:
     enabled: bool = False
-    indices: Optional[list[int]] = None
-    max_runs: Optional[int] = None
+    indices: list[int] | None = None
+    max_runs: int | None = None
     aim: bool = False
 
     def should_plot(self, index: int, total: int) -> bool:
@@ -94,7 +93,7 @@ class ScenarioConfig:
     number_of_proteins: dict  # {pkey: [n1, n2, ...]}
 
     # --- Crystalline domain sweep ---
-    cdegree: Optional[dict] = None  # {crystal_pro: [cg1, cg2, ...]}
+    cdegree: dict | None = None  # {crystal_pro: [cg1, cg2, ...]}
     crystal_suffix: str = ""
 
     # --- Parameter sweeps ---
@@ -109,11 +108,11 @@ class ScenarioConfig:
     steady_state_window: int = 20
 
     # --- Start and Aim areas ---
-    start_area: Optional[object] = None
-    aim_area: Optional[object] = None
+    start_area: object | None = None
+    aim_area: object | None = None
 
     # --- Lattice resolution ---
-    lattice_resolution: Optional[int] = None
+    lattice_resolution: int | None = None
 
     # --- Coordinate Wrapping ---
     wrap: bool = False
@@ -122,7 +121,7 @@ class ScenarioConfig:
     fully_crystal: bool = False
 
     # --- membranesize ---
-    membrane_size: Optional[tuple[int, int]] = (
+    membrane_size: tuple[int, int] | None = (
         None  # assume 5000 to be the standars (see make_exp_config)
     )
 

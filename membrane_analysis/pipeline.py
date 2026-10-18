@@ -5,15 +5,13 @@ from collections.abc import Iterator
 from copy import deepcopy
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
 
-import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
 import cyanomembranes as cm
 
-from .config import COLORBLIND_PALETTE, AnalysisType, Condition, ScenarioConfig
+from .config import AnalysisType, Condition, ScenarioConfig
 from .plotting import plot_individual_runs
 from .utils import _timeseries_filename
 

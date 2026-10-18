@@ -44,7 +44,6 @@ Spatial heterogeneity in cyanobacterial thylakoid membranes has been observed. H
 │   ├── plot_membranes.ipynb
 │   ├── scenarios.py           # Define model scenarios
 │   └── test_notebook.ipynb
-├── pixi.lock
 ├── pyproject.toml
 ├── README.md
 ├── src
@@ -56,8 +55,9 @@ Spatial heterogeneity in cyanobacterial thylakoid membranes has been observed. H
 │       ├── __init__.py
 │       ├── pdb_utils.py
 │       └── utils.py
-└── tutorial
-    └── brownian_diffusion.ipynb
+├── tutorial
+│   └── brownian_diffusion.ipynb
+└── uv.lock
 
 ```
 
@@ -67,20 +67,20 @@ Spatial heterogeneity in cyanobacterial thylakoid membranes has been observed. H
 
 ### Prerequisites
 
-- [Pixi](https://prefix.dev/docs/pixi/overview) — handles all dependencies.
+- [uv](https://docs.astral.sh/uv/) — handles Python and all dependencies.
 
 ### Installation
 
 ```bash
 git clone https://github.com/Computational-Biology-Aachen/cyanomembranes.git
 cd cyanomembranes
-pixi install
+uv sync
 ```
 
 To launch a Jupyter environment:
 
 ```bash
-pixi run jupyter lab
+uv run jupyter lab
 ```
 
 or run in IDE

@@ -312,8 +312,8 @@ def _select_dop(polygon: Polygon, halfspace: list[LineString]) -> Polygon:
     merged = unary_union(halfspace)
 
     # Split lines at all intersection points
-    split_lines = linemerge(merged)  # type: ignore - shapely
-    split_lines = list(split_lines.geoms)  # type: ignore - shapely
+    split_lines = linemerge(merged)  # type: ignore[arg-type]  # shapely
+    split_lines = list(split_lines.geoms)  # type: ignore[assignment, union-attr]  # shapely
 
     # Polygonize: Extract polygons from the network of lines
     polygons = list(polygonize(split_lines))

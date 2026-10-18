@@ -2,7 +2,7 @@ import matplotlib as mlp
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from matplotlib import cm, colors
+from matplotlib import colors
 from scipy.interpolate import interp1d
 from sklearn.linear_model import LinearRegression
 
@@ -13,7 +13,6 @@ from membrane_analysis.config import (
     AnalysisType,
 )
 
-from .config import Condition
 from .utils import _timeseries_filename
 
 

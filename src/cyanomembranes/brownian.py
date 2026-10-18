@@ -3,19 +3,14 @@
 from __future__ import annotations
 
 import math
-import os
-import tempfile
 from dataclasses import dataclass
 from multiprocessing import Pool
 from typing import TYPE_CHECKING
 
-import matplotlib.pyplot as plt
-import numba
 import numba as nb
 import numpy as np
 import pandas as pd
 import shapely.vectorized as sv
-from joblib import Parallel, delayed, dump, load
 from shapely import Point, Polygon, unary_union
 from shapely.affinity import translate
 from shapely.geometry import box
@@ -191,10 +186,7 @@ def prepare_geometry(shapes: list[Polygon] | None) -> list[Polygon]:
     list[Polygon]
         List of polygons.
     """
-    if shapes is None:
-        polygons = []
-    else:
-        polygons = shapes
+    polygons = [] if shapes is None else shapes
     return polygons
 
 
