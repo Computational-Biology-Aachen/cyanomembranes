@@ -148,7 +148,7 @@ def _sample_point_in_free_space(
     free_space: BaseGeometry,
     *,
     max_tries: int = 1000,
-    constraint: None | Polygon = None,
+    constraint: Polygon | None = None,
     rng: np.random.Generator | None = None,
 ) -> tuple[float, float]:
     """
@@ -260,7 +260,7 @@ def _create_halfspace(
 
     Parameters
     ----------
-    minmax_lst : List[Tuple[float, float]]
+    minmax_lst : list[tuple[float, float]]
         Min und Max Projection of a Polygon along an axis
     directions : np.ndarray
         Projection axis
@@ -271,7 +271,7 @@ def _create_halfspace(
 
     Returns
     -------
-    List[LineString]
+    list[LineString]
         List of LineStrings defining halfspaces
     """
     minmax = np.array(minmax_lst)  # shape (N, 2)
@@ -301,7 +301,7 @@ def _select_dop(polygon: Polygon, halfspace: list[LineString]) -> Polygon:
     ----------
     polygon : Polygon
         Shapely polygon
-    halfspace : List[LineString]
+    halfspace : list[LineString]
         Linestrings defining halfspaces
 
     Returns
@@ -336,7 +336,7 @@ def _sort_edges_by_angle(edge_lst: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
         Edge list
     Returns
     -------
-    Tuple[np.ndarray, np.ndarray]
+    tuple[np.ndarray, np.ndarray]
         Sorted indices and angles
     """
     # Get angles of edges with x-axis
@@ -663,9 +663,9 @@ def position_polygons_nfp(
 
     Parameters
     ----------
-    polygons : List[Polygon]
+    polygons : list[Polygon]
         Shapely polygons that should be placed
-    dimensions : List[float]
+    dimensions : list[float]
         Dimension of sheet
     max_rot : int, optional
         Max. number of rotation a shapely shape is allowed to do
@@ -673,7 +673,7 @@ def position_polygons_nfp(
 
     Returns
     -------
-    Tuple[List[Polygon],List[Tuple[float]]]
+    tuple[list[Polygon],list[tuple[float]]]
         Placed polygons and positions (cnetroid) of new polygons
     """
     rng = np.random.default_rng() if rng is None else rng
@@ -854,9 +854,9 @@ def placement_routine(
 
     Parameters
     ----------
-    polygons : List[Polygon]
+    polygons : list[Polygon]
         List of polygons that should be placed
-    dimensions : List[float]
+    dimensions : list[float]
         Dimension of the surface
     max_iter_placement : int, optional
         Max. number of placement iterations, by default 50
@@ -875,16 +875,16 @@ def placement_routine(
     random_direction : bool, optional
         If True direction of movement is random (see compress), by
         default True
-    constraint : Optional[Polygon], optional
+    constraint : Polygon | None, optional
         Polygon indicates an area where on a surface where new
         polygons should be placed, by default None
-    start_world : Optional[List[Polygon]], optional
+    start_world : list[Polygon] | None, optional
         Already placed polygons with which the procedure should star,
         by default None
 
     Returns
     -------
-    List[Polygon]
+    list[Polygon]
         List of placed polygons
     """
     direction = np.array([0, 0]) if direction is None else direction
@@ -943,9 +943,9 @@ def make_random_crystal_2d(
     lattice_type: Literal["square", "triangular", "hexagonal"] = "square",
     max_variation: float = 1.5,
     regular: bool = False,
-    constraint: None | Polygon = None,
+    constraint: Polygon | None = None,
     exclude_first: bool = False,
-    chaos: None | list[float] = None,
+    chaos: list[float] | None = None,
 ) -> list[Polygon]:
     seed = _translate_polygon(seed, 0, 0)
     seed_dop = get_dop(seed, k=16)

@@ -386,7 +386,7 @@ class ExperimentLatticeRun:
     def plot_run(
         self,
         *,
-        ax: None | Axes = None,
+        ax: Axes | None = None,
         aim_area: bool = False,
         scatter: bool = False,
         steps: int | None = None,
@@ -395,7 +395,7 @@ class ExperimentLatticeRun:
 
         Parameters
         ----------
-        ax : None | Axes, optional
+        ax : Axes | None, optional
             Matplotlib axes to draw on. If None a new Axes is created.
         aim_area : bool, optional
             If True, mark points where trajectories are inside the aim area
@@ -845,7 +845,7 @@ def random_walk_2d_lattice(
     aim_mask: np.ndarray | None = None,
     raster_chosen_obstacles: np.ndarray | None = None,
     free_raster_chosen_obstacles: np.ndarray | None = None,
-    particle_radius: None | int = None,
+    particle_radius: int | None = None,
     rng: np.random.Generator | None = None,
     save_every: int = 1,
     dimensions: tuple[int, int] = (0, 2000),
@@ -885,7 +885,7 @@ def random_walk_2d_lattice(
         is inside that area.
     raster_chosen_obstacles : np.ndarray | None, optional
         Mask selecting a subset of obstacles used for hit detection.
-    particle_radius : None | int, optional
+    particle_radius : int | None, optional
         If provided, use a kernel to validate moves against `free_centers`.
     rng : np.random.Generator | None, optional
         RNG for stochastic choices.
@@ -1160,19 +1160,19 @@ class ExperimentLatticeConfig:
     dimensions: tuple[int, int] = (0, 2000)
     coverage_dimension: tuple[float, float] | None = None
     random_start: bool = False
-    aim_area: None | Polygon = None
-    start_area: None | BaseGeometry = None
-    start_area_by_size: None | tuple = None
+    aim_area: Polygon | None = None
+    start_area: BaseGeometry | None = None
+    start_area_by_size: tuple | None = None
     chosen_obstacles_by_area: float | None = None
-    particle_radius: None | int = None
+    particle_radius: int | None = None
     has_ghost: bool = True
     store_history: bool = False
     save_every: int = 1
     shift_origin: bool = False
     steady_state_chosen_obstacle: bool = False
     wrap: bool = False
-    workers: None | int = 4
-    rng: None | np.random.Generator = None
+    workers: int | None = 4
+    rng: np.random.Generator | None = None
 
 
 @dataclass
@@ -1195,9 +1195,9 @@ class ExperimentLattice:
         Compute the free space for the experiment based on the configuration.
         """
         self._config = deepcopy(self.config)
-        raster_chosen_obstacles: None | np.ndarray = None
-        free_raster_chosen_obstacles: None | np.ndarray = None
-        start_mask: None | np.ndarray = None
+        raster_chosen_obstacles: np.ndarray | None = None
+        free_raster_chosen_obstacles: np.ndarray | None = None
+        start_mask: np.ndarray | None = None
 
         if self._config.start_area and self._config.start_area_by_size:
             msg = "You cannot specify start_area and start_area_by_size at once"

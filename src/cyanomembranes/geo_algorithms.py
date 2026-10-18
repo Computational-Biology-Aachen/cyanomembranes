@@ -46,7 +46,7 @@ def alpha_shape(
 
     Returns
     -------
-    tuple[list[Polygon], list[Tuple[float, float]]]
+    tuple[list[Polygon], list[tuple[float, float]]]
         a tuple of the new concave polygon and a list of the edge points
     """
     if len(points) < 4:  # noqa: PLR2004
