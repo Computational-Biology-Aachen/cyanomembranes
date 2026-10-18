@@ -40,7 +40,6 @@ repos:
         name: mypy
         files: ^src/
         types: [python]
-        stages: [manual]
         language: system
         entry: uv run mypy src
         pass_filenames: false
