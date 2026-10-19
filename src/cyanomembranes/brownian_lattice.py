@@ -13,7 +13,6 @@ from typing import TYPE_CHECKING
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import shapely.vectorized as sv
 import shapely.wkt
 from scipy.ndimage import binary_erosion
 from shapely import Polygon
@@ -154,24 +153,33 @@ def make_aim_mask(
     np.ndarray
         Boolean mask of the same shape as `raster` with True inside `aim_area`.
     """
+    h, w = raster.shape
     mask = np.zeros(raster.shape, dtype=bool)
 
     minx, miny, maxx, maxy = map(
         int,
         (
-            aim_area.bounds[0] / lattice_resolution,
-            aim_area.bounds[1] / lattice_resolution,
-            aim_area.bounds[2] / lattice_resolution,
-            aim_area.bounds[3] / lattice_resolution,
+            math.floor(aim_area.bounds[0] / lattice_resolution),
+            math.floor(aim_area.bounds[1] / lattice_resolution),
+            math.floor(aim_area.bounds[2] / lattice_resolution) + 1,
+            math.floor(aim_area.bounds[3] / lattice_resolution) + 1,
         ),
     )
+
+    minx = max(minx, 0)
+    miny = max(miny, 0)
+    maxx = min(maxx, w)
+    maxy = min(maxy, h)
+
+    if minx >= maxx or miny >= maxy:
+        return mask
 
     ys, xs = np.meshgrid(
         np.arange(miny, maxy) * lattice_resolution,
         np.arange(minx, maxx) * lattice_resolution,
         indexing="ij",
     )
-    mask[miny:maxy, minx:maxx] = sv.contains(aim_area, xs, ys)
+    mask[miny:maxy, minx:maxx] = shapely.contains_xy(aim_area, xs, ys)
 
     return mask
 
@@ -360,8 +368,20 @@ class ExperimentLatticeRun:
             Series with keys: 'Mean', 'Std', 'Sem', 'Ci_low', 'Ci_high',
             'Median' and 'IQR'.
         """
-        n_fpt = len(self.fpt)
         fi_val = self.fpt.dropna()["FirstInactiveTime"].to_numpy()
+        if fi_val.size == 0:
+            return pd.Series(
+                {
+                    "Mean": math.nan,
+                    "Std": math.nan,
+                    "Sem": math.nan,
+                    "Ci_low": math.nan,
+                    "Ci_high": math.nan,
+                    "Median": math.nan,
+                    "IQR": math.nan,
+                }
+            )
+        n_fpt = len(fi_val)
 
         mean = np.mean(fi_val)
         median = np.median(fi_val)
@@ -918,6 +938,7 @@ def random_walk_2d_lattice(
           column (present when `steady_state_chosen_obstacle` is True).
         - 'waiting_times': ndarray or None of recorded waiting times for hits.
     """
+    h, w = raster.shape
     if start is None:
         msg = "No start was provided"
         raise ValueError(msg)
@@ -952,7 +973,7 @@ def random_walk_2d_lattice(
         ai_hist = None
 
     msd = np.zeros((n_saved, nreps), dtype=np.uint32)
-    mad = np.zeros((n_saved, nreps), dtype=np.uint32)
+    mad = np.zeros((n_saved, nreps), dtype=np.float32)
     active = np.zeros((n_saved, nreps), dtype=np.uint8)
 
     # Particle / obstacle helpers
@@ -995,12 +1016,20 @@ def random_walk_2d_lattice(
             new_pos = new_pos_raw
             step_correction = None
 
+        inside = (
+            (new_pos[:, 0] >= 0)
+            & (new_pos[:, 0] < h)
+            & (new_pos[:, 1] >= 0)
+            & (new_pos[:, 1] < w)
+        )
+        lookup = np.clip(new_pos, 0, [h - 1, w - 1])
+
         # Free-space check
 
         if use_kernel:
             mask_free = check_local_free2(free_centers, new_pos)
         else:
-            mask_free = raster[new_pos[:, 0], new_pos[:, 1]] == 0
+            mask_free = (raster[lookup[:, 0], lookup[:, 1]] == 0) & inside
 
         if use_chosen:
             if use_kernel:
@@ -1011,8 +1040,8 @@ def random_walk_2d_lattice(
                     msg = "raster_chosen_obstacles is required when use_chosen is set"
                     raise ValueError(msg)
                 mask_hit_chosen = (
-                    raster_chosen_obstacles[new_pos[:, 0], new_pos[:, 1]] == 1
-                )
+                    raster_chosen_obstacles[lookup[:, 0], lookup[:, 1]] == 1
+                ) & inside
             newly_inactive = mask_hit_chosen & np.isnan(inactive_time)
             inactive_time[newly_inactive] = t * dt
 
@@ -1098,7 +1127,7 @@ def random_walk_2d_lattice(
                 "Time": np.repeat(time_vec, nreps),
                 "Replicate": np.tile(np.arange(nreps), n_saved),
                 "MSD": msd.ravel(),
-                "MAD": msd.ravel(),
+                "MAD": mad.ravel(),
                 "Active": active.ravel(),
             }
         )
@@ -1143,7 +1172,8 @@ class ExperimentLatticeConfig:
     diff_coefficient : float
         Diffusion coefficient.
     start : tuple[float, float]
-        Starting position.
+        Starting position ``(x, y)`` in lattice cells (world units divided by
+        ``lattice_resolution``), measured from the world origin.
     dimensions : tuple[float, float]
         Simulation box dimensions.
     random_start : bool
@@ -1227,8 +1257,14 @@ class ExperimentLattice:
                 self._config.aim_area = translate(
                     self._config.aim_area, xoff=max_dim / 2, yoff=max_dim / 2
                 )
+            if self._config.start_area is not None:
+                self._config.start_area = translate(
+                    self._config.start_area, xoff=max_dim / 2, yoff=max_dim / 2
+                )
+
             sx, sy = self._config.start
-            self._config.start = (int(sx + max_dim / 2), int(sy + max_dim / 2))
+            shift = max_dim / 2 / self._config.lattice_resolution
+            self._config.start = (int(sx + shift), int(sy + shift))
         min_dim, max_dim = self._config.dimensions
         min_dim_cov: float = min_dim
         max_dim_cov: float = max_dim
@@ -1343,13 +1379,6 @@ class ExperimentLattice:
                     for p in self._config.shapes
                 ]
 
-            if self._config.aim_area is not None:
-                self.aim_area = translate(
-                    self._config.aim_area, xoff=max_dim, yoff=max_dim
-                )
-            else:
-                self.aim_area = None
-
             if self._config.start_area is not None:
                 self.start_area: BaseGeometry | None = translate(
                     self._config.start_area, xoff=max_dim, yoff=max_dim
@@ -1359,9 +1388,13 @@ class ExperimentLattice:
 
             self._config.has_ghost = True
 
-            self._config.start = tuple(
-                np.array(self._config.start) + max_dim / self._config.lattice_resolution
-            )
+        if self._config.aim_area is not None:
+            self.aim_area = translate(self._config.aim_area, xoff=max_dim, yoff=max_dim)
+        else:
+            self.aim_area = None
+        self._config.start = tuple(
+            np.array(self._config.start) + max_dim / self._config.lattice_resolution
+        )
 
         self._config.dimensions = tuple(
             np.array(self._config.dimensions) / self.config.lattice_resolution
@@ -1427,7 +1460,7 @@ class ExperimentLattice:
             self._config.replicates,
             self._config.dimensions,
             self._config.particle_radius,
-            self._config.start,
+            (self._config.start[1], self._config.start[0]),
             self.start_mask,
             self.free_centers,
             self._config.rng,
@@ -1542,9 +1575,6 @@ class EnsembleExperimentLattice:
             wkt_list = [p.wkt for p in polygons]
             all_wkt_lists.append(wkt_list)
 
-        ensemble_lst = []
-        coverage_lst = []
-
         ctx = mp.get_context("spawn")
 
         with ProcessPoolExecutor(
@@ -1555,11 +1585,17 @@ class EnsembleExperimentLattice:
                 for wkt_list in all_wkt_lists
             ]
 
+            result_tuples: list[tuple[int, ExperimentLatticeRun, float]] = []
+
             for fut in tqdm(
                 as_completed(futures), total=len(futures), desc="Running experiments"
             ):
+                idx = futures.index(fut)
                 run, cov = fut.result()
-                ensemble_lst.append(run)
-                coverage_lst.append(cov)
+                result_tuples.append((idx, run, cov))
+
+            sorted_result_tuples = sorted(result_tuples, key=lambda item: item[0])
+            ensemble_lst = [exp_run for _, exp_run, _ in sorted_result_tuples]
+            coverage_lst = [cov for _, _, cov in sorted_result_tuples]
 
         return EnsembleExperimentLatticeRun(ensemble_lst, coverage_lst)
