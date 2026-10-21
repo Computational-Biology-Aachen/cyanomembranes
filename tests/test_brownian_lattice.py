@@ -919,26 +919,34 @@ def test_hits_total_equals_waiting_times():
     )
 
 
-@pytest.mark.xfail(
-    reason=(
-        "Low: hits after the last saved step are dropped when nsteps % save_every"
-        " != 0 (brownian_lattice.py:1070-1074)"
-    ),
-    strict=True,
-)
-def test_trailing_hits_are_not_dropped():
+def test_trailing_hits_are_dropped_with_warning():
     raster, chosen = _enclosed()
-    res = _chosen_walk(
-        raster,
-        chosen,
-        nreps=2,
-        nsteps=10,
-        save_every=3,
-        steady_state_chosen_obstacle=True,
-    )
-    assert res["hits"].drop(columns="Time").to_numpy().sum() == len(
-        res["waiting_times"]
-    )
+    with pytest.warns(UserWarning, match="hits of last interval"):
+        res = _chosen_walk(
+            raster,
+            chosen,
+            nreps=2,
+            nsteps=10,
+            save_every=3,
+            steady_state_chosen_obstacle=True,
+        )
+    in_table = res["hits"].drop(columns="Time").to_numpy().sum()
+    assert in_table < len(res["waiting_times"])  # the last step (10) is missing
+    assert len(res["waiting_times"]) == 2 * 10  # enclosed: every step is a hit
+
+
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {"nsteps": 9, "save_every": 3, "steady_state_chosen_obstacle": True},
+        {"nsteps": 10, "save_every": 3, "steady_state_chosen_obstacle": False},
+    ],
+)
+def test_no_trailing_hits_warning_when_nothing_is_dropped(kwargs):
+    raster, chosen = _enclosed()
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        _chosen_walk(raster, chosen, nreps=2, **kwargs)
 
 
 def test_only_chosen_obstacles_count_as_hits():

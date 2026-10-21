@@ -5,6 +5,7 @@ from __future__ import annotations
 import dataclasses
 import math
 import multiprocessing as mp
+import warnings
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from copy import deepcopy
 from dataclasses import dataclass
@@ -926,6 +927,9 @@ def random_walk_2d_lattice(
         If True, respawned particles are placed at random valid starts.
     steady_state_chosen_obstacle : bool, optional
         If True, collect hit counts and waiting times for chosen obstacles.
+        Hits are counted per save interval; if ``nsteps`` is not a multiple of
+        ``save_every``, the hits after the last save step are not in the hits
+        table (a warning is issued) but are in the waiting times.
 
     Returns
     -------
@@ -934,8 +938,8 @@ def random_walk_2d_lattice(
         - 'traj': DataFrame with trajectory data (Time, Replicate, MSD, Active,
           and optionally X, Y and Aim when `store_history` is True).
         - 'fpt': DataFrame with columns ['Replicate', 'FirstInactiveTime'].
-        - 'hits': DataFrame or None with per-time hit counts and a 'Time'
-          column (present when `steady_state_chosen_obstacle` is True).
+        - 'hits': DataFrame or None with hit counts per save interval and a
+          'Time' column (present when `steady_state_chosen_obstacle` is True).
         - 'waiting_times': ndarray or None of recorded waiting times for hits.
     """
     h, w = raster.shape
@@ -991,6 +995,13 @@ def random_walk_2d_lattice(
     waiting_time_all: list[np.ndarray] = []
 
     if steady_state_chosen_obstacle:
+        if nsteps % save_every != 0:
+            msg = (
+                "hits of last interval are not included in the hits table"
+                ", but they are included in the waiting times."
+                " This could lead to discrepancies."
+            )
+            warnings.warn(msg, UserWarning, stacklevel=2)
         hits = np.zeros((n_saved, nreps), dtype=np.uint16)
         hits_buffer = np.zeros(nreps, dtype=np.uint16)
         waiting_time = np.zeros(nreps, dtype=np.float32)
