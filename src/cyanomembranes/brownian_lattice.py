@@ -1568,6 +1568,8 @@ class EnsembleExperimentLattice:
             An object containing the results of all experiments in the ensemble.
         """
         config_dict = dataclasses.asdict(self.config)
+        if self.config.rng is not None:
+            children = deepcopy(self.config.rng).spawn(len(self.file_paths))
 
         all_wkt_lists = []
         for f in self.file_paths:
@@ -1580,10 +1582,20 @@ class EnsembleExperimentLattice:
         with ProcessPoolExecutor(
             max_workers=self.config.workers, mp_context=ctx
         ) as pool:
-            futures = [
-                pool.submit(_run_single_lattice_experiment, wkt_list, config_dict)
-                for wkt_list in all_wkt_lists
-            ]
+            if self.config.rng is None:
+                futures = [
+                    pool.submit(_run_single_lattice_experiment, wkt_list, config_dict)
+                    for wkt_list in all_wkt_lists
+                ]
+            else:
+                futures = [
+                    pool.submit(
+                        _run_single_lattice_experiment,
+                        wkt_list,
+                        {**config_dict, "rng": children[i]},
+                    )
+                    for i, wkt_list in enumerate(all_wkt_lists)
+                ]
 
             result_tuples: list[tuple[int, ExperimentLatticeRun, float]] = []
 

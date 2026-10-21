@@ -1767,18 +1767,55 @@ def test_ensemble_results_follow_file_order(monkeypatch, tmp_path):
     assert [run.shapes[0].area for run in result.runs] == pytest.approx([4, 9, 16])
 
 
-@pytest.mark.xfail(
-    reason=(
-        "Medium: a seeded rng is copied into every member, so all members share one"
-        " random stream (brownian_lattice.py:1537)"
-    ),
-    strict=True,
-)
 def test_ensemble_members_are_independent_with_seed(inline_executor, tmp_path):
     files = _write_files(tmp_path, [[box(5, 5, 9, 9)], [box(5, 5, 9, 9)]])
     cfg = _ensemble_config(rng=np.random.default_rng(5))
     result = bl.EnsembleExperimentLattice(files, cfg).run()
     first, second = (r.mean_trajectories()["MSD"].to_numpy() for r in result.runs)
+    assert not np.array_equal(first, second)
+
+
+def _member_msd(result):
+    return np.array([r.mean_trajectories()["MSD"].to_numpy() for r in result.runs])
+
+
+def test_ensemble_seeded_is_reproducible(inline_executor, tmp_path):
+    files = _write_files(tmp_path, [[box(5, 5, 9, 9)], [box(6, 6, 9, 9)]])
+    cfg = _ensemble_config(rng=np.random.default_rng(5))
+    first = _member_msd(bl.EnsembleExperimentLattice(files, cfg).run())
+    same_config = _member_msd(bl.EnsembleExperimentLattice(files, cfg).run())
+    new_config = _member_msd(
+        bl.EnsembleExperimentLattice(
+            files, _ensemble_config(rng=np.random.default_rng(5))
+        ).run()
+    )
+    assert np.array_equal(first, same_config)  # the user's rng is not advanced
+    assert np.array_equal(first, new_config)
+    other_seed = _member_msd(
+        bl.EnsembleExperimentLattice(
+            files, _ensemble_config(rng=np.random.default_rng(6))
+        ).run()
+    )
+    assert not np.array_equal(first, other_seed)
+
+
+def test_ensemble_seeded_independent_of_completion_order(
+    inline_executor, monkeypatch, tmp_path
+):
+    files = _write_files(
+        tmp_path, [[box(5, 5, 9, 9)], [box(6, 6, 9, 9)], [box(7, 7, 9, 9)]]
+    )
+    cfg = _ensemble_config(rng=np.random.default_rng(5))
+    in_order = _member_msd(bl.EnsembleExperimentLattice(files, cfg).run())
+    monkeypatch.setattr(bl, "as_completed", _in_reverse_order)
+    reverse = _member_msd(bl.EnsembleExperimentLattice(files, cfg).run())
+    assert np.array_equal(in_order, reverse)
+
+
+def test_ensemble_unseeded_members_use_fresh_streams(inline_executor, tmp_path):
+    files = _write_files(tmp_path, [[box(5, 5, 9, 9)], [box(5, 5, 9, 9)]])
+    result = bl.EnsembleExperimentLattice(files, _ensemble_config(rng=None)).run()
+    first, second = _member_msd(result)
     assert not np.array_equal(first, second)
 
 
