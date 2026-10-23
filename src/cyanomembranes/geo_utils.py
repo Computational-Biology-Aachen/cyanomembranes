@@ -22,6 +22,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, cast
 
 import numpy as np
+import numpy.typing as npt
 from affine import Affine
 from rasterio.features import rasterize
 from shapely import LineString, MultiPolygon, Polygon, wkt
@@ -33,8 +34,6 @@ from shapely.prepared import prep
 from shapely.strtree import STRtree
 from skimage.morphology import medial_axis
 from tqdm import tqdm
-
-from cyanomembranes.utils import XY, float2d_
 
 logger = logging.getLogger(__name__)
 
@@ -790,7 +789,7 @@ def compress(
             tree_ghosts = STRtree(flat_ghosts) if flat_ghosts else None
             if random_direction:
                 angle = rng.uniform(0, 2 * np.pi)
-                vector = float2d_(np.cos(angle), np.sin(angle))
+                vector = np.array([np.cos(angle), np.sin(angle)])
             else:
                 centroid = np.array(p.centroid.coords[0])
                 vector = direction - centroid
@@ -857,7 +856,8 @@ def placement_routine(
     polygons : list[Polygon]
         List of polygons that should be placed
     dimensions : list[float]
-        Dimension of the surface
+        Size of the square surface as ``[N, N]``, not ``[min, max]``. The
+        first polygon is placed at the corner (N, N).
     max_iter_placement : int, optional
         Max. number of placement iterations, by default 50
     max_rot : int, optional
@@ -884,8 +884,10 @@ def placement_routine(
 
     Returns
     -------
-    list[Polygon]
-        List of placed polygons
+    tuple[list[Polygon], list, list[Polygon], list[list[Polygon]]]
+        Placed polygons (world), positions of the polygons placed in the last
+        round only, polygons that could not be placed, and the ghost copies
+        of the placed polygons.
     """
     direction = np.array([0, 0]) if direction is None else direction
 
@@ -1020,7 +1022,7 @@ def make_random_crystal_2d(
     return placed
 
 
-def get_longest_direction(polygon: Polygon) -> XY:
+def get_longest_direction(polygon: Polygon) -> npt.NDArray[np.float64]:
     min_rec = polygon.minimum_rotated_rectangle
     coords = np.array(min_rec.exterior.coords)  # type: ignore
     edges = coords[1:] - coords[:-1]

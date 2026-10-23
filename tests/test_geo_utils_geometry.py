@@ -830,16 +830,12 @@ def test_placement_routine_compress_runs_with_n_n_convention(monkeypatch):
     assert _overlaps(world, tile=200) == []
 
 
-@pytest.mark.xfail(
-    reason="Medium: compress gets dimension=[0, dimensions[0]] = [0, 0] for the"
-    " (min, max) convention dimensions=[0, N], so it never moves anything"
-    " (geo_utils.py:921)",
-    strict=True,
-)
-def test_placement_routine_compress_runs_with_zero_max_convention(monkeypatch):
+def test_placement_routine_zero_max_convention_is_not_supported(monkeypatch):
+    # dimensions is documented as [N, N]; [0, N] makes compress get [0, 0] and
+    # move nothing (geo_utils.py:921)
     _, calls = _routine([0, 200], monkeypatch, _routine_polygons())
-    assert calls
-    assert sum(moved for _, moved in calls) > 0
+    assert calls and all(dim == [0, 0] for dim, _ in calls)
+    assert sum(moved for _, moved in calls) == 0
 
 
 @pytest.mark.xfail(

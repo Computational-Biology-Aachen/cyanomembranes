@@ -757,9 +757,10 @@ def spawn(
     """Select or generate starting positions for `k` particles on the raster.
 
     If `random_start` is False the provided `start` coordinate is returned
-    repeated `k` times. Otherwise this function samples `k` distinct free
-    lattice centers. If `has_ghost` is True the central (unpadded) region is
-    used for sampling and an offset is added before returning positions.
+    repeated `k` times. Otherwise this function samples `k` free lattice
+    centers with replacement, so positions may repeat. If `has_ghost` is True
+    the central (unpadded) region is used for sampling. The offset `max_dim`
+    is added to the returned positions in both cases.
 
     Parameters
     ----------
@@ -785,8 +786,8 @@ def spawn(
     random_start : bool, optional
         If False, return `start` repeated `k` times; otherwise sample.
     has_ghost : bool, optional
-        If True, sampling is performed on a central sub-region and an offset
-        of `max_dim` is applied to the returned positions.
+        If True, sampling is performed on the central sub-region of the raster.
+        The offset of `max_dim` is applied to the returned positions either way.
 
     Returns
     -------
@@ -797,9 +798,11 @@ def spawn(
     Raises
     ------
     RuntimeError
-        If no valid start locations are available after filtering.
-    RuntimeError
-        If less than `k` candidate locations exist.
+        If `particle_radius` is given and no valid start location remains
+        after the start-area filtering.
+    ValueError
+        If no candidate location remains in the other cases (raised by
+        `rng.choice`). The number of candidates is not compared with `k`.
     """
     if not random_start:
         return np.full((k, 2), start, dtype=int)

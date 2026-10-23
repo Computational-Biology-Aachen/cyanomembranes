@@ -48,6 +48,10 @@ def alpha_shape(
     -------
     tuple[list[Polygon], list[tuple[float, float]]]
         a tuple of the new concave polygon and a list of the edge points
+
+    Notes
+    -----
+    Enclosed holes are filled; only concavities open to the outside are kept.
     """
     if len(points) < 4:  # noqa: PLR2004
         # When you have a triangle, there is no sense in computing an alpha

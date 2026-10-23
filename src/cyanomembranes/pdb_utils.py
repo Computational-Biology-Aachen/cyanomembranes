@@ -150,7 +150,8 @@ def make_polygon(
     out_file : Path
         Path to save the WKT polygon file.
     viewing_axis : np.ndarray, optional
-        3D vector specifying the viewing direction (default: [0, 0, 1]).
+        3D vector specifying the viewing direction (default: [0, 0, 1]). Only
+        the default z axis (projection onto the x, y plane) is supported.
     atom_z_range : tuple or None, optional
         If provided, only atoms within this z-range are projected (default: None).
 
