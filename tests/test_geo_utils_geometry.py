@@ -496,16 +496,18 @@ def test_nfp_first_polygon_reproducible_with_seed():
     assert a.equals(b) and not a.equals(c)
 
 
-@pytest.mark.xfail(
-    reason="Low: rng is not passed to _sample_point_in_free_space, so only the"
-    " first polygon is reproducible (geo_utils.py:737-739)",
-    strict=True,
-)
 def test_nfp_reproducible_with_seed():
     polygons = [_star(30, seed=s) for s in range(8)]
     a = _place(polygons, [0, 400], seed=5)[0]
     b = _place(polygons, [0, 400], seed=5)[0]
     assert all(p.equals(q) for p, q in zip(a, b, strict=True))
+
+
+def test_nfp_different_seeds_differ():
+    polygons = [_star(30, seed=s) for s in range(8)]
+    a = _place(polygons, [0, 400], seed=5)[0]
+    c = _place(polygons, [0, 400], seed=6)[0]
+    assert any(not p.equals(q) for p, q in zip(a, c, strict=True))
 
 
 def test_nfp_first_polygon_random_for_zero_max_convention():
@@ -820,6 +822,32 @@ def test_placement_routine_zero_max_convention_is_not_supported(monkeypatch):
     _, calls = _routine([0, 200], monkeypatch, _routine_polygons())
     assert calls and all(dim == [0, 0] for dim, _ in calls)
     assert sum(moved for _, moved in calls) == 0
+
+
+def _seeded_routine(seed):
+    # Several rounds (one polygon never fits), so that compress runs as well.
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        return gu.placement_routine(
+            _routine_polygons(),
+            [200, 200],
+            max_iter_placement=3,
+            max_rot=4,
+            max_iter_shuffle=3,
+            step_size=10,
+            rng=np.random.default_rng(seed),
+        )[0]
+
+
+def test_placement_routine_reproducible_with_seed():
+    a, b = _seeded_routine(1), _seeded_routine(1)
+    assert len(a) == len(b)
+    assert all(p.equals(q) for p, q in zip(a, b, strict=True))
+
+
+def test_placement_routine_different_seeds_differ():
+    a, c = _seeded_routine(1), _seeded_routine(2)
+    assert len(a) != len(c) or any(not p.equals(q) for p, q in zip(a, c, strict=True))
 
 
 @pytest.mark.xfail(
