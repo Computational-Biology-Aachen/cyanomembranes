@@ -38,22 +38,16 @@ DUMMY_ATOMS = [
 M_N, M_C, M_O = 14.0067, 12.0107, 15.9994  # Biopython atomic masses
 
 
-def _line(serial, atom, charge=""):
+def _line(serial, atom):
     name, res, resi, x, y, z, element = atom
     return (
         f"ATOM  {serial:5d} {name:<4s} {res:>3s} A{resi:4d}    "
-        f"{x:8.3f}{y:8.3f}{z:8.3f}  1.00  0.00          {element:>2s}{charge:>2s}\n"
+        f"{x:8.3f}{y:8.3f}{z:8.3f}  1.00  0.00          {element:>2s}\n"
     )
 
 
-def _write_pdb(path, atoms, charges=None):
-    charges = charges or [""] * len(atoms)
-    path.write_text(
-        "".join(
-            _line(i + 1, a, c)
-            for i, (a, c) in enumerate(zip(atoms, charges, strict=True))
-        )
-    )
+def _write_pdb(path, atoms):
+    path.write_text("".join(_line(i + 1, a) for i, a in enumerate(atoms)))
     return path
 
 
@@ -103,7 +97,7 @@ def test_remove_membrane_without_dummies_keeps_everything(clean_pdb_file, tmp_pa
 
 
 # --------------------------------------------------------------------------
-# mass, centre of mass, charge
+# mass, centre of mass
 # --------------------------------------------------------------------------
 
 
@@ -148,20 +142,6 @@ def test_get_center_of_mass_ignores_atoms_without_mass(
 def test_get_total_mass_ignores_atoms_without_mass(unknown_element_file):
     s = pu.read_pdb(unknown_element_file)
     assert pu.get_total_mass(s) == pytest.approx((M_N + 3 * M_C + M_O) / 1000)
-
-
-def test_get_total_charge_is_zero_without_charge_information(clean_pdb_file):
-    assert pu.get_total_charge(pu.read_pdb(clean_pdb_file)) == 0
-
-
-@pytest.mark.xfail(
-    reason="Medium: get_total_charge is always 0 for PDB files, Biopython leaves"
-    " atom.get_charge() None (pdb_utils.py:112-130)",
-    strict=True,
-)
-def test_get_total_charge_reads_charge_column(tmp_path):
-    f = _write_pdb(tmp_path / "q.pdb", PROTEIN_ATOMS, ["1+", "", "", "", ""])
-    assert pu.get_total_charge(pu.read_pdb(f)) == 1
 
 
 # --------------------------------------------------------------------------
@@ -269,7 +249,6 @@ def test_process_proteins_creates_files_and_properties(in_dir, tmp_path):
     assert list(res) == ["a"]
     entry = res["a"]
     assert entry["total_mass"] == pytest.approx((M_N + 3 * M_C + M_O) / 1000)
-    assert entry["total_charge"] == 0
     assert len(list(entry["structure"].get_atoms())) == 5  # dummies removed
     assert entry["center_of_mass"].shape == (3,)
     assert entry["polygon"][0].area == pytest.approx(25.0)

@@ -177,6 +177,9 @@ def _sample_point_in_free_space(
     rng = np.random.default_rng() if rng is None else rng
     if constraint:
         free_space = free_space.intersection(constraint)
+    if free_space.is_empty:
+        msg = "No free space to sample from"
+        raise RuntimeError(msg)
     minx, miny, maxx, maxy = free_space.bounds
     prepared = prep(free_space)
     for _ in range(max_tries):
@@ -214,7 +217,7 @@ def _get_projection_directions_normals(n: int) -> tuple[np.ndarray, np.ndarray]:
     angles = np.unique(angles)
 
     # Create direction vectors using trigonometry
-    directions = np.stack((np.cos(angles), np.sin(angles)), axis=1).round(3)
+    directions = np.stack((np.cos(angles), np.sin(angles)), axis=1)
 
     # Create normals to the direction vectors
     normals = np.array([-directions[:, 1], directions[:, 0]]).T
@@ -734,7 +737,7 @@ def position_polygons_nfp(
 
             try:
                 random_point = _sample_point_in_free_space(
-                    free_space, constraint=constraint
+                    free_space, constraint=constraint, rng=rng
                 )
                 new_p = _translate_polygon(p, random_point[0], random_point[1])
                 ghosts_new_p = _create_ghost(new_p, dimensions)  # type: ignore
@@ -845,6 +848,7 @@ def placement_routine(
     constraint: Polygon | None = None,
     start_world: list[Polygon] | None = None,
     start_ghosts: list[list[Polygon]] | None = None,
+    rng: np.random.Generator | None = None,
 ) -> list[Polygon]:
     """Placement routine that positions polygons on surfaces.
     It runs position_polygons_nfp and compress iteratively until
@@ -881,6 +885,11 @@ def placement_routine(
     start_world : list[Polygon] | None, optional
         Already placed polygons with which the procedure should star,
         by default None
+    start_ghosts : list[list[Polygon]] | None, optional
+        Ghost copies of ``start_world``, by default None
+    rng : np.random.Generator | None, optional
+        Random number generator shared by all placement and compress calls,
+        for reproducible placement. By default a fresh ``default_rng()``.
 
     Returns
     -------
@@ -889,6 +898,7 @@ def placement_routine(
         round only, polygons that could not be placed, and the ghost copies
         of the placed polygons.
     """
+    rng = np.random.default_rng() if rng is None else rng
     direction = np.array([0, 0]) if direction is None else direction
 
     not_placed: list[Polygon] = []
@@ -905,6 +915,7 @@ def placement_routine(
                 constraint=constraint,
                 world=start_world,
                 ghosts=start_ghosts,
+                rng=rng,
             )
             placed_positions.extend(positions)
         else:
@@ -921,6 +932,7 @@ def placement_routine(
                 random_direction=random_direction,
                 input_ghosts=ghosts,  # type: ignore
                 dimension=[0, dimensions[0]],  # type: ignore
+                rng=rng,
             )
             logger.info("WORLD %s", len(world))  # type: ignore
             world, positions, not_placed, ghosts = position_polygons_nfp(
@@ -932,6 +944,7 @@ def placement_routine(
                 break_immediately=True,
                 constraint=constraint,
                 ghosts=ghosts,
+                rng=rng,
             )
             placed_positions.extend(positions)
 
@@ -948,6 +961,7 @@ def make_random_crystal_2d(
     constraint: Polygon | None = None,
     exclude_first: bool = False,
     chaos: list[float] | None = None,
+    max_attempts: int = 10_000,
 ) -> list[Polygon]:
     seed = _translate_polygon(seed, 0, 0)
     seed_dop = get_dop(seed, k=16)
@@ -969,7 +983,11 @@ def make_random_crystal_2d(
     placed = [seed]
 
     with tqdm(total=n - 1, desc="Placed Polygons") as pbar:
+        failed_attempts = 0
         while n > 1:
+            if failed_attempts > max_attempts:
+                msg = "Could not place anymore polygons"
+                raise RuntimeError(msg)
             frontier_idx = random.choice(range(len(placed)))
             fpoly = placed[frontier_idx]
 
@@ -1001,6 +1019,7 @@ def make_random_crystal_2d(
             overlaps = [c for c in candidates if placed[c].intersects(new_polygon)]
 
             if overlaps:
+                failed_attempts += 1
                 continue  # skip this placement
 
             if constraint:
@@ -1008,13 +1027,16 @@ def make_random_crystal_2d(
                     placed.append(new_polygon)
                     n -= 1
                     pbar.update(1)
+                    failed_attempts = 0
                 else:
+                    failed_attempts += 1
                     continue
 
             else:
                 placed.append(new_polygon)
                 n -= 1
                 pbar.update(1)
+                failed_attempts = 0
 
     if exclude_first:
         placed.pop(0)

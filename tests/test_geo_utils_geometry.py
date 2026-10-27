@@ -267,29 +267,23 @@ def test_get_dop_is_convex_ccw_and_close_to_polygon(seed):
     dop = gu.get_dop(p, k=8, extension=100_000)
     assert dop.is_valid and dop.exterior.is_ccw
     assert dop.convex_hull.area == pytest.approx(dop.area, rel=1e-9)  # convex
-    assert dop.area >= p.convex_hull.area * (
-        1 - 1e-4
-    )  # encloses the hull, up to rounding
+    assert dop.area >= p.convex_hull.area * (1 - 1e-9)  # encloses the hull
 
 
 @pytest.mark.parametrize("seed", range(6))
 def test_get_dop_protrusion_is_bounded(seed):
-    # Pins the size of the rounding error: well below 5e-4 x size.
+    # The directions are unit vectors, so the polygon must not protrude at all.
     size = 100
     p = gu._translate_polygon(_star(size, seed=seed), 0, 0)
     dop = gu.get_dop(p, k=8, extension=100_000)
-    assert _protrusion_depth(p, dop) < 5e-4 * size
+    assert _protrusion_depth(p, dop) < 1e-9 * size
 
 
-@pytest.mark.xfail(
-    reason="Medium: the DOP is not a superset of the polygon, rounded non-unit"
-    " directions cut up to 3.4e-4 x size into it (geo_utils.py:218,282)",
-    strict=True,
-)
+@pytest.mark.parametrize("k", [8, 16, 32])
 @pytest.mark.parametrize("seed", range(6))
-def test_get_dop_contains_polygon(seed):
+def test_get_dop_contains_polygon(seed, k):
     p = gu._translate_polygon(_star(100, seed=seed), 0, 0)
-    dop = gu.get_dop(p, k=8, extension=100_000)
+    dop = gu.get_dop(p, k=k, extension=100_000)
     assert p.difference(dop).area <= 1e-9
 
 
@@ -440,11 +434,6 @@ def test_sample_point_raises_runtime_error_after_max_tries():
         )
 
 
-@pytest.mark.xfail(
-    reason="Low: empty free space or disjoint constraint raises OverflowError, not"
-    " the documented RuntimeError (geo_utils.py:178-190)",
-    strict=True,
-)
 @pytest.mark.parametrize("case", ["empty", "disjoint"])
 def test_sample_point_empty_free_space_raises_runtime_error(case):
     if case == "empty":
@@ -662,11 +651,6 @@ def test_nfp_tries_max_rot_distinct_orientations(monkeypatch, max_rot):
     assert distinct == max_rot
 
 
-@pytest.mark.xfail(
-    reason="Low: a constraint without free space raises OverflowError instead of"
-    " a placement warning (geo_utils.py:178-190, 754)",
-    strict=True,
-)
 def test_nfp_fully_blocked_constraint_does_not_crash():
     existing = translate(_star(60, seed=9), 300, 300)
     _, _, not_placed, _ = _place(
@@ -921,19 +905,28 @@ import random
 from shapely.geometry import box
 import cyanomembranes.geo_utils as g
 random.seed(0)
-g.make_random_crystal_2d(box(-5, -5, 5, 5), 50, constraint=box(-40, -40, 40, 40))
+g.make_random_crystal_2d(
+    box(-5, -5, 5, 5), 50, constraint=box(-40, -40, 40, 40), max_attempts=200
+)
 """
 
 
-@pytest.mark.xfail(
-    reason="Medium (freeze risk): make_random_crystal_2d loops forever when the"
-    " constraint cannot hold n polygons (geo_utils.py:970-1015)",
-    strict=True,
-)
-def test_crystal_full_constraint_terminates():
-    subprocess.run(
+def test_crystal_full_constraint_raises_instead_of_hanging():
+    # The constraint cannot hold 50 polygons: the loop must give up with a
+    # RuntimeError after max_attempts consecutive failures (subprocess so that
+    # a regression cannot freeze the test run).
+    result = subprocess.run(
         [sys.executable, "-c", _HANG],
-        timeout=4,
-        check=True,
+        timeout=30,
+        check=False,
         capture_output=True,
+        text=True,
     )
+    assert result.returncode != 0
+    assert "RuntimeError" in result.stderr
+
+
+def test_crystal_max_attempts_does_not_limit_feasible_crystals():
+    random.seed(0)
+    placed = gu.make_random_crystal_2d(box(-5, -5, 5, 5), 12, max_attempts=50)
+    assert len(placed) == 12

@@ -4,7 +4,7 @@ Utilities for working with PDB (Protein Data Bank) files.
 This module provides functions to read, process, and analyze PDB files, including:
 - Reading PDB files into Bio.PDB structures
 - Removing membrane dummy atoms
-- Calculating total mass and charge
+- Calculating total mass and center of mass
 - Generating 2D concave polygons from protein structures
 - Batch processing of multiple protein files
 """
@@ -109,27 +109,6 @@ def get_center_of_mass(structure: Structure):
     return (masses[:, np.newaxis] * coords).sum(axis=0) / total_mass
 
 
-def get_total_charge(structure: Structure) -> float:
-    """
-    Calculate the total charge of a protein structure.
-
-    Parameters
-    ----------
-    structure : Bio.PDB.Structure.Structure
-        Protein structure object.
-
-    Returns
-    -------
-    float
-        Total charge of the protein.
-    """
-    total_charge = 0
-    for atom in structure.get_atoms():
-        if (charge := atom.get_charge()) is not None:
-            total_charge += charge
-    return total_charge
-
-
 def make_polygon(
     in_file: Path,
     out_file: Path | None,
@@ -208,7 +187,7 @@ def process_proteins(in_path: Path, out_path: Path, pdb_files: list[str]) -> dic
     properties.
 
     For each PDB file, removes membrane dummy atoms, generates a 2D polygon outline,
-    reads the cleaned structure, and computes total mass and charge.
+    reads the cleaned structure, and computes total mass and center of mass.
 
     Parameters
     ----------
@@ -222,7 +201,8 @@ def process_proteins(in_path: Path, out_path: Path, pdb_files: list[str]) -> dic
     Returns
     -------
     dict
-        Dictionary mapping protein names to their structure, mass, charge, and polygon.
+        Dictionary mapping protein names to their structure, total mass,
+        center of mass, and polygon.
     """
     out_path.mkdir(exist_ok=True, parents=True)
     proteins = {}
@@ -246,7 +226,6 @@ def process_proteins(in_path: Path, out_path: Path, pdb_files: list[str]) -> dic
             out_path / pdbf.replace(".pdb", ".wkt").replace(".trpdb", ".wkt")
         )
         total_mass = get_total_mass(structure)
-        total_charge = get_total_charge(structure)
         center_of_mass = get_center_of_mass(structure)
 
         for s in [".pdb", ".trpdb"]:
@@ -255,7 +234,6 @@ def process_proteins(in_path: Path, out_path: Path, pdb_files: list[str]) -> dic
         proteins[pdbf] = {
             "structure": structure,
             "total_mass": total_mass,
-            "total_charge": total_charge,
             "center_of_mass": center_of_mass,
             "polygon": polygon,
         }
