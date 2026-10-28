@@ -38,7 +38,7 @@ from tqdm import tqdm
 logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable
+    from collections.abc import Iterable, Sequence
 
     from shapely.geometry.base import BaseGeometry
 
@@ -84,7 +84,7 @@ def _get_lattice_directions(
     raise ValueError(msg)
 
 
-def _create_ghost(p: Polygon, dimensions: tuple[float, float]) -> list[Polygon]:
+def _create_ghost(p: Polygon, dimensions: Sequence[float]) -> list[Polygon]:
     """
     Create ghost polygons to simulate periodic boundary conditions.
 
@@ -95,7 +95,7 @@ def _create_ghost(p: Polygon, dimensions: tuple[float, float]) -> list[Polygon]:
     ----------
     p : Polygon
         The original polygon to create ghosts for.
-    dimensions : tuple[float, float]
+    dimensions : Sequence[float]
         The (min, max) dimensions of the workspace.
 
     Returns
@@ -196,25 +196,33 @@ def _get_projection_directions_normals(n: int) -> tuple[np.ndarray, np.ndarray]:
     """
     Create evenly spaced unit direction vectors and their normals in 2D.
 
+    Opposite directions describe the same projection axis, so only `n // 2` axes
+    between 0 and 180 degrees are generated.
+
     Parameters
     ----------
     n : int
-        Number of unit vectors to generate.
+        Number of half-space lines of the DOP (two per axis). Must be even and at
+        least 4.
 
     Returns
     -------
     tuple[np.ndarray, np.ndarray]
-        Tuple of (directions, normals), each of shape (n, 2).
-    """
-    # Select evenly space direction
-    angles = np.linspace(0, 2 * np.pi, n, endpoint=False)
+        Tuple of (directions, normals), each of shape (n // 2, 2).
 
-    # Because each opposite directions on the unit circle are
-    # connected to one direction vector we need to remove doubles
-    angles = np.where(
-        angles >= np.pi, angles - np.pi, angles
-    )  # remove negative directions angels > pi
-    angles = np.unique(angles)
+    Raises
+    ------
+    ValueError
+        If `n` is odd or smaller than 4.
+    """
+    if n % 2 != 0:
+        msg = "n must be even"
+        raise ValueError(msg)
+    if n < 4:
+        msg = "n must be at least 4"
+        raise ValueError(msg)
+    # Select evenly space direction
+    angles = np.linspace(0, np.pi, n // 2, endpoint=False)
 
     # Create direction vectors using trigonometry
     directions = np.stack((np.cos(angles), np.sin(angles)), axis=1)
@@ -256,7 +264,7 @@ def _create_halfspace(
     *,
     directions: np.ndarray,
     normals: np.ndarray,
-    extension: int = 100,
+    extension: int = 100_000,
 ) -> list[LineString]:
     """Create LineStrings that define the halfspaces
 
@@ -269,7 +277,9 @@ def _create_halfspace(
     normals : np.ndarray
         Normal of a Projection axis
     extension : int, optional
-        Extension factor for LineStrings, by default 100
+        Half-length of the halfspace lines around the foot point of the origin,
+        by default 100_000. Must exceed the distance of the polygon from the
+        origin plus its size.
 
     Returns
     -------
@@ -537,7 +547,8 @@ def get_edges(polygon: Polygon, *, ccw: bool = True) -> np.ndarray:
 def mink_sum(polygon_a: Polygon, polygon_b: Polygon) -> Polygon:
     """Gets the Minkowski sum of two convex polygons.
     Imagine polygon_B sliding around polygon_A, whereby the
-    center of polygon_B moves along the edges
+    center of polygon_B moves along the edges. Both polygons are oriented
+    counter-clockwise first, so the orientation of the input does not matter.
 
     Parameters
     ----------
@@ -550,6 +561,8 @@ def mink_sum(polygon_a: Polygon, polygon_b: Polygon) -> Polygon:
     Polygon
         Shapely polygon (Minkowski sum)
     """
+    polygon_a = orient(polygon_a, sign=1.0)
+    polygon_b = orient(polygon_b, sign=1.0)
     A = np.array(polygon_a.exterior.coords)[:-1]
     B = np.array(polygon_b.exterior.coords)[:-1]
 
@@ -588,7 +601,7 @@ def get_dop(
     polygon: Polygon,
     *,
     k: int = 8,
-    extension: int = 100,
+    extension: int = 100_000,
     hf: bool = False,
 ) -> Polygon | list[LineString]:
     """Creates a k-Discrete Orientation Polytope (DOP)
@@ -598,9 +611,12 @@ def get_dop(
     poly : Polygon
         Original Polygon
     k : int, optional
-        Number of edges in the DOP, by default 8
-    extension: int, optional
-        Extension factor for LineString
+        Number of half-space lines of the DOP (k / 2 projection axes), must be
+        even and at least 4, by default 8
+    extension : int, optional
+        Half-length of the halfspace lines, by default 100_000. Must exceed the
+        distance of the polygon from the origin plus its size (about 10 times
+        that for k=32), otherwise a ValueError is raised.
 
     Returns
     -------
@@ -678,32 +694,36 @@ def position_polygons_nfp(
     tuple[list[Polygon],list[tuple[float]]]
         Placed polygons and positions (cnetroid) of new polygons
     """
+    world = list(world) if world else []
+    ghosts = list(ghosts) if ghosts else []
     rng = np.random.default_rng() if rng is None else rng
     polygons = [
         _translate_polygon(p, 0, 0) for p in polygons
     ]  # ref point for NFP is centroid at (0,0)
     min_c, max_c = dimensions[0], dimensions[1]
     workspace = box(0, 0, max_c, max_c)
+    if world and not ghosts:
+        ghosts = [_create_ghost(p, dimensions) for p in world]
+    if len(world) != len(ghosts):
+        msg = f"length of world and ghosts differ {len(world)} != {len(ghosts)}"
+        raise ValueError(msg)
     not_placed = []
-    if not isinstance(world, list):
-        world = []
-    if not isinstance(ghosts, list):
-        ghosts = []
     positions = []
 
     for pos, p in enumerate(tqdm(polygons, desc="Placing polygons")):
         placed = False
-
+        base = p
         for i in range(max_rot):
             angle = i * (360 / max_rot)
-            p = rotate(p, angle, origin="centroid")  # noqa: PLW2901
+            rotated = rotate(base, angle, origin="centroid")
 
             if not world:
                 x = rng.uniform(min_c, max_c)
                 y = rng.uniform(min_c, max_c)
-                new_p = _translate_polygon(p, x, y)
+                new_p = _translate_polygon(rotated, x, y)
                 world.append(new_p)
-                ghosts.append(_create_ghost(new_p, dimensions))  # type: ignore
+                ghosts.append(_create_ghost(new_p, dimensions))
+                positions.append((x, y))
                 placed = True
                 break
 
@@ -719,7 +739,7 @@ def position_polygons_nfp(
             # Discrete oriented polygons
             dops_world = [get_dop(w, extension=extension) for w in extended_world]
 
-            dop_p = get_dop(p, extension=extension)
+            dop_p = get_dop(rotated, extension=extension)
 
             # Actual NFP calculation
             reflected_dop_p = point_reflect(dop_p)  # type: ignore
@@ -739,8 +759,8 @@ def position_polygons_nfp(
                 random_point = _sample_point_in_free_space(
                     free_space, constraint=constraint, rng=rng
                 )
-                new_p = _translate_polygon(p, random_point[0], random_point[1])
-                ghosts_new_p = _create_ghost(new_p, dimensions)  # type: ignore
+                new_p = _translate_polygon(rotated, random_point[0], random_point[1])
+                ghosts_new_p = _create_ghost(new_p, dimensions)
 
                 overlap = any(g.intersects(w) for g in ghosts_new_p for w in world)
 
@@ -763,7 +783,7 @@ def position_polygons_nfp(
             )
             if break_immediately:
                 return world, positions, polygons[pos:], ghosts
-            not_placed.append(p)
+            not_placed.append(base)
     return world, positions, not_placed, ghosts
 
 
@@ -776,7 +796,7 @@ def compress(
     rotation_angle: int | None = None,
     direction: tuple[int, int] | np.ndarray = (0, 0),
     random_direction: bool = False,
-    dimension: tuple[float, float] = (0, 2000),
+    dimension: Sequence[float] = (0, 2000),
     rng: np.random.Generator | None = None,
 ) -> tuple[list[Polygon], list[list[Polygon]]]:
     rng = np.random.default_rng() if rng is None else rng
@@ -849,7 +869,7 @@ def placement_routine(
     start_world: list[Polygon] | None = None,
     start_ghosts: list[list[Polygon]] | None = None,
     rng: np.random.Generator | None = None,
-) -> list[Polygon]:
+) -> tuple[list[Polygon], list, list[Polygon], list[list[Polygon]]]:
     """Placement routine that positions polygons on surfaces.
     It runs position_polygons_nfp and compress iteratively until
     either all polygons have been placed or the maximal number of
@@ -902,7 +922,6 @@ def placement_routine(
     direction = np.array([0, 0]) if direction is None else direction
 
     not_placed: list[Polygon] = []
-    placed_positions = []
     for i in range(max_iter_placement):
         logger.info("PLACEMENT ROUND %s", i + 1)
         if i == 0:
@@ -917,7 +936,6 @@ def placement_routine(
                 ghosts=start_ghosts,
                 rng=rng,
             )
-            placed_positions.extend(positions)
         else:
             len_np = len(not_placed)
             logger.info("Number of remaining shapes %s", len_np)
@@ -931,7 +949,7 @@ def placement_routine(
                 direction=direction,
                 random_direction=random_direction,
                 input_ghosts=ghosts,  # type: ignore
-                dimension=[0, dimensions[0]],  # type: ignore
+                dimension=[0, dimensions[0]],
                 rng=rng,
             )
             logger.info("WORLD %s", len(world))  # type: ignore
@@ -946,8 +964,8 @@ def placement_routine(
                 ghosts=ghosts,
                 rng=rng,
             )
-            placed_positions.extend(positions)
 
+    positions = [tuple(w.centroid.coords[0]) for w in world]
     return world, positions, not_placed, ghosts  # type: ignore
 
 

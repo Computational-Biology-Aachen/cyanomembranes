@@ -9,7 +9,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 from scipy.spatial import Delaunay
-from shapely.geometry import MultiPoint, Point, Polygon
+from shapely.geometry import LineString, MultiPoint, Point, Polygon
 from shapely.ops import unary_union
 
 from cyanomembranes.geo_algorithms import alpha_shape
@@ -181,15 +181,15 @@ def test_edge_points_cover_the_outline_vertices():
     assert all(tuple(np.round(v, 9)) in ends for v in shape.exterior.coords)
 
 
-@pytest.mark.xfail(
-    reason="Low: edge_points holds every edge of every accepted triangle, not only"
-    " the outline (geo_algorithms.py:15-27, 91-92)",
-    strict=True,
-)
-def test_edge_points_are_only_the_outline():
-    # 5x5 grid: the outline has 16 unit segments, the triangulation many more
-    _, edges = alpha_shape(_points(_grid(5)), alpha=1.0)
-    assert len(edges) == 16
+def test_edge_points_contain_inner_edges_not_only_the_outline():
+    # Documented behaviour: all edges of the accepted triangles are returned.
+    # 5x5 grid: the outline has 16 unit segments, the triangulation has more.
+    shape, edges = alpha_shape(_points(_grid(5)), alpha=1.0)
+    assert len(edges) > 16
+    boundary = shape.boundary.buffer(1e-9)
+    inner = [e for e in edges if not boundary.contains(LineString(e))]
+    assert inner  # edges inside the shape exist
+    assert all(shape.buffer(1e-9).contains(LineString(e)) for e in edges)
 
 
 # --------------------------------------------------------------------------
@@ -204,16 +204,10 @@ def test_fewer_than_four_points_raise(n):
 
 
 def test_alpha_rejecting_all_triangles_gives_empty_result():
-    # current behaviour: silent empty GeometryCollection, see the xfail below
-    shape, edges = alpha_shape(_points(_random(100)), alpha=100.0)
+    with pytest.warns(UserWarning, match="alpha was too large"):
+        shape, edges = alpha_shape(_points(_random(100)), alpha=100.0)
     assert shape.is_empty
     assert edges == []
-
-
-def test_alpha_zero_raises_zero_division_error():
-    # current behaviour, see the xfail below
-    with pytest.raises(ZeroDivisionError):
-        alpha_shape(_points(_random(50)), alpha=0.0)
 
 
 def test_collinear_points_raise():
@@ -229,32 +223,17 @@ def test_nan_coordinates_raise_value_error():
         alpha_shape(_points(xy), alpha=1.0)
 
 
-@pytest.mark.xfail(
-    reason="Low: an empty result (no accepted triangle) is returned silently,"
-    " make_polygon would write 'GEOMETRYCOLLECTION EMPTY' (geo_algorithms.py:91-92)",
-    strict=True,
-)
 def test_empty_result_raises_or_warns():
     with pytest.warns(UserWarning):
         alpha_shape(_points(_random(100)), alpha=100.0)
 
 
-@pytest.mark.xfail(
-    reason="Low: alpha <= 0 is not validated (alpha=0 ZeroDivisionError, alpha < 0"
-    " silently empty) (geo_algorithms.py:76)",
-    strict=True,
-)
 @pytest.mark.parametrize("alpha", [0.0, -1.0])
 def test_non_positive_alpha_raises_value_error(alpha):
     with pytest.raises(ValueError, match="alpha"):
         alpha_shape(_points(_random(50)), alpha=alpha)
 
 
-@pytest.mark.xfail(
-    reason="Low: Heron's formula rounds the area of thin triangles to 0"
-    " (ZeroDivisionError) or makes it negative (ValueError) (geo_algorithms.py:70-79)",
-    strict=True,
-)
 @pytest.mark.parametrize("deviation", [1e-10, 1e-12])
 def test_nearly_collinear_points_do_not_crash(deviation):
     x = np.linspace(0, 10, 20)

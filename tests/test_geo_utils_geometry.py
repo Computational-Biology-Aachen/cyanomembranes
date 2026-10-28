@@ -219,17 +219,12 @@ def test_sort_edges_by_angle_orders_counterclockwise_from_x_axis():
 def test_projection_directions_k8_are_four_unit_directions():
     directions, normals = gu._get_projection_directions_normals(8)
     assert directions.shape == (4, 2)
-    assert np.allclose(np.linalg.norm(directions, axis=1), 1.0, atol=1e-3)
-    assert np.allclose(np.sum(directions * normals, axis=1), 0.0, atol=1e-3)
+    assert np.allclose(np.linalg.norm(directions, axis=1), 1.0, atol=1e-12)
+    assert np.allclose(np.sum(directions * normals, axis=1), 0.0, atol=1e-12)
     angles = np.sort(np.degrees(np.arctan2(directions[:, 1], directions[:, 0])) % 180)
-    assert angles == pytest.approx([0, 45, 90, 135], abs=0.1)
+    assert angles == pytest.approx([0, 45, 90, 135], abs=1e-9)
 
 
-@pytest.mark.xfail(
-    reason="Low: float folding leaves near-duplicate directions, k=16 gives 11"
-    " instead of 8 (geo_utils.py:208-215)",
-    strict=True,
-)
 @pytest.mark.parametrize("k", [16, 32])
 def test_projection_directions_are_distinct_lines(k):
     directions, _ = gu._get_projection_directions_normals(k)
@@ -241,14 +236,16 @@ def test_projection_directions_are_distinct_lines(k):
     assert len(set(lines)) == len(directions)
 
 
-@pytest.mark.xfail(
-    reason="Low: no validation for k < 3, one or two directions cannot bound a"
-    " polygon (geo_utils.py:193)",
-    strict=True,
-)
-def test_projection_directions_reject_k_below_three():
-    with pytest.raises(ValueError):
-        gu._get_projection_directions_normals(2)
+@pytest.mark.parametrize("n", [0, 2])
+def test_projection_directions_reject_n_below_four(n):
+    with pytest.raises(ValueError, match="at least 4"):
+        gu._get_projection_directions_normals(n)
+
+
+@pytest.mark.parametrize("n", [3, 5, 7, 9])
+def test_projection_directions_reject_odd_n(n):
+    with pytest.raises(ValueError, match="even"):
+        gu._get_projection_directions_normals(n)
 
 
 def test_project_polygon_matches_bounds():
@@ -299,24 +296,21 @@ def test_get_dop_too_short_halfspaces_raise_value_error():
         gu.get_dop(p, k=8, extension=5)
 
 
-@pytest.mark.xfail(
-    reason="Low: default extension=100 fails for polygons larger than about 150"
-    " units (geo_utils.py:589)",
-    strict=True,
-)
 def test_get_dop_default_extension_handles_large_polygon():
     p = gu._translate_polygon(_star(300, seed=0), 0, 0)
     assert gu.get_dop(p, k=8).is_valid
 
 
-@pytest.mark.xfail(
-    reason="Low: default extension=100 fails for polygons far from the origin"
-    " (geo_utils.py:589)",
-    strict=True,
-)
 def test_get_dop_default_extension_handles_far_polygon():
     p = _star(40, seed=0, center=(1000, 1000))
     assert gu.get_dop(p, k=8).is_valid
+
+
+@pytest.mark.parametrize("size", [0.5, 1.0, 5000.0])
+def test_get_dop_default_extension_contains_polygon_at_any_size(size):
+    p = gu._translate_polygon(_star(size, seed=1), 0, 0)
+    dop = gu.get_dop(p, k=16)
+    assert p.difference(dop.buffer(1e-9 * size)).is_empty
 
 
 # --------------------------------------------------------------------------
@@ -345,11 +339,6 @@ def test_mink_sum_of_squares():
     assert result.equals(box(-1, -1, 3, 3))
 
 
-@pytest.mark.xfail(
-    reason="Low: mink_sum is wrong for clockwise input and does not orient"
-    " (geo_utils.py:551-582)",
-    strict=True,
-)
 def test_mink_sum_clockwise_input():
     a, b = _convex(1), _convex(101)
     a_cw, b_cw = orient(a, -1.0), orient(b, -1.0)
@@ -523,14 +512,16 @@ def test_nfp_first_polygon_in_corner_for_n_n_convention():
     assert _overlaps(world, tile=400) == []
 
 
-@pytest.mark.xfail(
-    reason="Low: the first polygon (empty world) is not added to `positions`"
-    " (geo_utils.py:704)",
-    strict=True,
-)
 def test_nfp_positions_cover_all_placed_polygons():
     world, positions, _, _ = _place([_star(30, seed=s) for s in range(3)], [0, 400])
     assert len(positions) == len(world)
+
+
+def test_nfp_positions_are_the_centroids_of_the_placed_polygons():
+    world, positions, _, _ = _place([_star(30, seed=s) for s in range(4)], [0, 400])
+    for w, (x, y) in zip(world, positions, strict=True):
+        assert w.centroid.x == pytest.approx(x)
+        assert w.centroid.y == pytest.approx(y)
 
 
 def test_nfp_existing_world_is_kept_and_respected():
@@ -548,17 +539,34 @@ def test_nfp_existing_world_is_kept_and_respected():
     assert _overlaps(world, tile=dim) == []
 
 
-@pytest.mark.xfail(
-    reason="Low: the caller's world/ghosts lists are mutated in place"
-    " (geo_utils.py:686-690)",
-    strict=True,
-)
 def test_nfp_does_not_mutate_input_world():
     existing = translate(_star(30, seed=9), 200, 200)
     start_world = [existing]
     start_ghosts = [gu._create_ghost(existing, [0, 400])]
     _place([_star(30, seed=1)], [0, 400], world=start_world, ghosts=start_ghosts)
     assert len(start_world) == 1 and len(start_ghosts) == 1
+
+
+def test_nfp_world_without_ghosts_builds_ghosts():
+    existing = translate(_star(30, seed=9), 200, 200)
+    world, _, not_placed, ghosts = _place(
+        [_star(30, seed=1)], [0, 400], world=[existing]
+    )
+    assert len(world) == 2 and not not_placed
+    assert len(ghosts) == len(world)
+    assert all(len(g) == 8 for g in ghosts)
+    assert _overlaps(world, tile=400) == []
+
+
+def test_nfp_world_ghosts_length_mismatch_raises_value_error():
+    existing = translate(_star(30, seed=9), 200, 200)
+    with pytest.raises(ValueError, match="differ"):
+        _place(
+            [_star(30, seed=1)],
+            [0, 400],
+            world=[existing],
+            ghosts=[gu._create_ghost(existing, [0, 400])] * 2,
+        )
 
 
 def _full_world(dim):
@@ -612,45 +620,40 @@ def _tried_orientations(monkeypatch, max_rot):
             ghosts=ghosts,
             rng=np.random.default_rng(0),
         )
-    cumulative = np.cumsum(angles) % 360
-    return len({round(float(a), 6) for a in cumulative}), len(angles)
+    return len({round(float(a) % 360, 6) for a in angles}), len(angles)
 
 
-@pytest.mark.parametrize(
-    "max_rot",
-    [
-        8,
-        16,
-        pytest.param(
-            3,
-            marks=pytest.mark.xfail(
-                reason="Low: rotations accumulate, max_rot=3 tries 2 orientations"
-                " (geo_utils.py:697)",
-                strict=True,
-            ),
-        ),
-        pytest.param(
-            5,
-            marks=pytest.mark.xfail(
-                reason="Low: rotations accumulate, max_rot=5 tries 3 orientations"
-                " (geo_utils.py:697)",
-                strict=True,
-            ),
-        ),
-        pytest.param(
-            6,
-            marks=pytest.mark.xfail(
-                reason="Low: rotations accumulate, max_rot=6 tries 4 orientations"
-                " (geo_utils.py:697)",
-                strict=True,
-            ),
-        ),
-    ],
-)
+@pytest.mark.parametrize("max_rot", [3, 5, 6, 8, 16])
 def test_nfp_tries_max_rot_distinct_orientations(monkeypatch, max_rot):
     distinct, tries = _tried_orientations(monkeypatch, max_rot)
     assert tries == max_rot
     assert distinct == max_rot
+
+
+@pytest.mark.parametrize("seed", range(5))
+def test_nfp_rotated_polygon_is_placed_without_overlap(seed):
+    # Elongated shapes: the polygon placed must be the rotated one whose NFP was
+    # used, otherwise rotations other than the first overlap their neighbours.
+    polygons = [box(0, 0, 60, 8) for _ in range(30)]
+    world, _, _, _ = _place(polygons, [0, 200], seed=seed, max_rot=4)
+    assert _overlaps(world, tile=200) == []
+
+
+def test_nfp_not_placed_polygon_keeps_original_orientation():
+    original = box(0, 0, 60, 8)
+    world, ghosts = _full_world(200)
+    with pytest.warns(UserWarning, match="Could not place polygon"):
+        _, _, not_placed, _ = gu.position_polygons_nfp(
+            [original],
+            dimensions=[0, 200],
+            max_rot=4,
+            world=world,
+            ghosts=ghosts,
+            rng=np.random.default_rng(0),
+        )
+    expected = gu._translate_polygon(original, 0, 0)
+    assert len(not_placed) == 1
+    assert not_placed[0].equals_exact(expected, tolerance=1e-9)
 
 
 def test_nfp_fully_blocked_constraint_does_not_crash():
@@ -850,14 +853,35 @@ def test_placement_routine_different_seeds_differ():
     assert len(a) != len(c) or any(not p.equals(q) for p, q in zip(a, c, strict=True))
 
 
-@pytest.mark.xfail(
-    reason="Low: placement_routine returns only the positions of the last round"
-    " (geo_utils.py:936)",
-    strict=True,
-)
 def test_placement_routine_positions_cover_placed_polygons(monkeypatch):
     (world, positions, _, _), _ = _routine([200, 200], monkeypatch, _routine_polygons())
     assert len(positions) == len(world)
+
+
+def test_placement_routine_positions_match_final_world(monkeypatch):
+    # compress moves polygons after they were placed: the positions must follow
+    (world, positions, _, _), calls = _routine(
+        [200, 200], monkeypatch, _routine_polygons()
+    )
+    assert sum(moved for _, moved in calls) > 0
+    for w, (x, y) in zip(world, positions, strict=True):
+        assert w.centroid.x == pytest.approx(x)
+        assert w.centroid.y == pytest.approx(y)
+
+
+def test_placement_routine_positions_include_start_world():
+    start = translate(_star(20, seed=9), 100, 100)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        world, positions, _, _ = gu.placement_routine(
+            [_star(20, seed=1)],
+            [200, 200],
+            max_rot=4,
+            start_world=[start],
+            rng=np.random.default_rng(0),
+        )
+    assert len(world) == len(positions) == 2
+    assert positions[0] == pytest.approx(tuple(start.centroid.coords[0]))
 
 
 # --------------------------------------------------------------------------
@@ -919,11 +943,6 @@ def test_crystal_constraint_is_respected(py_random):
     assert all(constraint.intersects(p) for p in crystal[1:])
 
 
-@pytest.mark.xfail(
-    reason="Low: make_random_crystal_2d uses the default extension=100, a large seed"
-    " fails with 'Could not find a DOP' (geo_utils.py:951)",
-    strict=True,
-)
 def test_crystal_large_seed():
     gu.make_random_crystal_2d(_star(400, seed=1), 3)
 

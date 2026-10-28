@@ -134,11 +134,6 @@ def test_get_center_of_mass_ignores_atoms_without_mass(
     assert np.allclose(got, ref)
 
 
-@pytest.mark.xfail(
-    reason="Low: get_total_mass returns NaN when one atom has an unknown element,"
-    " get_center_of_mass skips such atoms (pdb_utils.py:91-94)",
-    strict=True,
-)
 def test_get_total_mass_ignores_atoms_without_mass(unknown_element_file):
     s = pu.read_pdb(unknown_element_file)
     assert pu.get_total_mass(s) == pytest.approx((M_N + 3 * M_C + M_O) / 1000)
@@ -151,9 +146,8 @@ def test_get_total_mass_ignores_atoms_without_mass(unknown_element_file):
 
 def test_make_polygon_projects_onto_xy_plane(clean_pdb_file):
     coords, _, poly = pu.make_polygon(clean_pdb_file, None)
-    assert coords.shape == (5, 3)
-    assert np.allclose(coords[:, :2], _coords(pu.read_pdb(clean_pdb_file))[:, :2])
-    assert np.allclose(coords[:, 2], 0)
+    assert coords.shape == (5, 2)
+    assert np.allclose(coords, _coords(pu.read_pdb(clean_pdb_file))[:, :2])
     assert isinstance(poly, Polygon)
     assert poly.is_valid
     assert poly.area == pytest.approx(25.0)
@@ -182,6 +176,25 @@ def test_make_polygon_atom_z_range_without_atoms_raises(clean_pdb_file):
         pu.make_polygon(clean_pdb_file, None, atom_z_range=(100, 200))
 
 
+def test_make_polygon_disconnected_parts_raise_value_error(tmp_path):
+    # two clusters 50 A apart: alpha_shape returns a MultiPolygon
+    near = PROTEIN_ATOMS
+    far = [("F" + n[:3], "ALA", 2, x + 50.0, y, z, e) for n, _, _, x, y, z, e in near]
+    f = _write_pdb(tmp_path / "split.pdb", near + far)
+    with pytest.raises(ValueError, match="not a Polygon"):
+        pu.make_polygon(f, None)
+
+
+def test_make_polygon_disconnected_parts_write_no_wkt(tmp_path):
+    near = PROTEIN_ATOMS
+    far = [("F" + n[:3], "ALA", 2, x + 50.0, y, z, e) for n, _, _, x, y, z, e in near]
+    f = _write_pdb(tmp_path / "split.pdb", near + far)
+    out = tmp_path / "split.wkt"
+    with pytest.raises(ValueError, match="not a Polygon"):
+        pu.make_polygon(f, out)
+    assert not out.exists()
+
+
 def test_make_polygon_writes_wkt_readable_by_readwkt(clean_pdb_file, tmp_path):
     out = tmp_path / "poly.wkt"
     _, _, poly = pu.make_polygon(clean_pdb_file, out)
@@ -193,39 +206,6 @@ def test_make_polygon_without_out_file_writes_nothing(clean_pdb_file, tmp_path):
     before = set(tmp_path.iterdir())
     pu.make_polygon(clean_pdb_file, None)
     assert set(tmp_path.iterdir()) == before
-
-
-@pytest.mark.xfail(
-    reason="Low: viewing_axis other than z fails (QhullError), points are cut to"
-    " (x, y) instead of in-plane coordinates (pdb_utils.py:184-189). Remove if the"
-    " parameter is removed.",
-    strict=True,
-)
-@pytest.mark.parametrize("axis", [(1.0, 0, 0), (0, 1.0, 0), (1.0, 1.0, 0)])
-def test_make_polygon_other_viewing_axes(clean_pdb_file, axis):
-    _, _, poly = pu.make_polygon(clean_pdb_file, None, viewing_axis=np.array(axis))
-    assert poly.area > 0
-
-
-@pytest.mark.xfail(
-    reason="Low: viewing_axis is normalised in place and mutates the caller's"
-    " array (pdb_utils.py:169)",
-    strict=True,
-)
-def test_make_polygon_does_not_mutate_viewing_axis(clean_pdb_file):
-    axis = np.array([0.0, 0.0, 2.0])
-    pu.make_polygon(clean_pdb_file, None, viewing_axis=axis)
-    assert np.allclose(axis, [0, 0, 2])
-
-
-@pytest.mark.xfail(
-    reason="Low: in-place normalisation fails for an integer viewing_axis"
-    " (UFuncTypeError, pdb_utils.py:169)",
-    strict=True,
-)
-def test_make_polygon_accepts_integer_viewing_axis(clean_pdb_file):
-    _, _, poly = pu.make_polygon(clean_pdb_file, None, viewing_axis=np.array([0, 0, 1]))
-    assert poly.area == pytest.approx(25.0)
 
 
 # --------------------------------------------------------------------------
@@ -276,11 +256,6 @@ def test_process_proteins_missing_input_raises(in_dir, tmp_path):
         pu.process_proteins(in_dir, tmp_path / "out", ["missing.pdb"])
 
 
-@pytest.mark.xfail(
-    reason="Low: cache check uses `and`, so when only the .wkt is missing nothing is"
-    " regenerated and readwkt raises FileNotFoundError (pdb_utils.py:232)",
-    strict=True,
-)
 def test_process_proteins_regenerates_missing_wkt(in_dir, tmp_path):
     out = tmp_path / "out"
     pu.process_proteins(in_dir, out, ["a.pdb"])
@@ -290,11 +265,6 @@ def test_process_proteins_regenerates_missing_wkt(in_dir, tmp_path):
     assert res["a"]["polygon"][0].area == pytest.approx(25.0)
 
 
-@pytest.mark.xfail(
-    reason="Low: for .trpdb input the cache file names keep the .trpdb name, so the"
-    " cache never hits and files are rewritten (pdb_utils.py:229-232)",
-    strict=True,
-)
 def test_process_proteins_trpdb_uses_cache(in_dir, tmp_path):
     out = tmp_path / "out"
     pu.process_proteins(in_dir, out, ["c.trpdb"])
@@ -305,8 +275,9 @@ def test_process_proteins_trpdb_uses_cache(in_dir, tmp_path):
 
 
 @pytest.mark.xfail(
-    reason="Low: info.csv holds only the proteins of the last call (earlier runs are"
-    " overwritten) and objects as repr strings (pdb_utils.py:262)",
+    reason="Low: info.csv is written once per call but holds only the proteins of"
+    " that call (earlier runs are overwritten) and objects as repr strings"
+    " (pdb_utils.py:234)",
     strict=True,
 )
 def test_process_proteins_info_csv_accumulates_over_calls(in_dir, tmp_path):
