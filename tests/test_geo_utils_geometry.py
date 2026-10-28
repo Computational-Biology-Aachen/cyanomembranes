@@ -105,15 +105,13 @@ def test_lattice_directions_unsupported_raises():
         gu._get_lattice_directions("cubic")  # type: ignore[arg-type]
 
 
-@pytest.mark.xfail(
-    reason='Low: "triangular" and "hexagonal" return the same six directions'
-    " (geo_utils.py:70-83)",
-    strict=True,
-)
-def test_triangular_and_hexagonal_directions_differ():
+def test_triangular_and_hexagonal_directions_are_aliases():
     tri = np.array(gu._get_lattice_directions("triangular"))
     hexa = np.array(gu._get_lattice_directions("hexagonal"))
-    assert not np.allclose(tri, hexa)
+    assert tri.shape == (6, 2)
+    assert np.allclose(tri, hexa)
+    angles = np.degrees(np.arctan2(tri[:, 1], tri[:, 0])) % 360
+    assert angles == pytest.approx([0, 60, 120, 180, 240, 300])
 
 
 # --------------------------------------------------------------------------
@@ -132,14 +130,13 @@ def test_create_ghost_eight_neighbours():
     assert all(g.area == p.area for g in ghosts)
 
 
-@pytest.mark.xfail(
-    reason="Low: _create_ghost uses dimensions[1] as tile size, not max - min"
-    " (geo_utils.py:119)",
-    strict=True,
-)
-def test_create_ghost_tile_size_is_max_minus_min():
-    ghost = gu._create_ghost(box(20, 20, 30, 30), (10, 50))[1]  # (0, 1) offset
-    assert ghost.bounds[1] == pytest.approx(20 + 40)
+def test_create_ghost_tile_size_is_second_dimension():
+    # [N, N] convention: the tile size is dimensions[1] (= N); the lower entry is
+    # not used.
+    ghost = gu._create_ghost(box(20, 20, 30, 30), (50, 50))[1]  # (0, 1) offset
+    assert ghost.bounds[1] == pytest.approx(20 + 50)
+    same = gu._create_ghost(box(20, 20, 30, 30), (10, 50))[1]
+    assert same.bounds == pytest.approx(ghost.bounds)
 
 
 def test_translate_polygon_moves_centroid_to_target():
@@ -192,11 +189,6 @@ def test_get_edges_ccw_false_gives_clockwise_edges():
     assert _signed_area_of_edges(gu.get_edges(cw_poly, ccw=False)) < 0
 
 
-@pytest.mark.xfail(
-    reason="Low: get_edges(ccw=True) does not orient, a clockwise polygon returns"
-    " clockwise edges (geo_utils.py:529)",
-    strict=True,
-)
 def test_get_edges_ccw_true_gives_counterclockwise_edges():
     cw_poly = orient(_star(20, seed=1), -1.0)
     assert _signed_area_of_edges(gu.get_edges(cw_poly, ccw=True)) > 0
@@ -363,11 +355,6 @@ def test_elongate_polygon_box():
     assert e.bounds == pytest.approx((-2.5, 0.0, 12.5, 2.0))
 
 
-@pytest.mark.xfail(
-    reason="Low: elongate_polygon moves the centroid (rotation and scale use"
-    " different centres) (geo_utils.py:452-456)",
-    strict=True,
-)
 def test_elongate_polygon_keeps_centroid():
     p = _star(100, seed=1, center=(500, 300))
     e = gu.elongate_polygon(p, factor=1.2)

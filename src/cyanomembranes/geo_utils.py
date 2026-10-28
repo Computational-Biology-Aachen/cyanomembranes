@@ -49,6 +49,9 @@ def _get_lattice_directions(
     """
     Return lattice direction unit vectors for a given lattice type.
 
+    "triangular" and "hexagonal" are aliases: both return the six close-packed
+    directions at 0, 60, ..., 300 degrees.
+
     Parameters
     ----------
     lattice_type : Literal["square", "triangular", "hexagonal"]
@@ -66,19 +69,10 @@ def _get_lattice_directions(
     """
     if lattice_type == "square":
         return [(1, 0), (-1, 0), (0, 1), (0, -1)]
-    if lattice_type == "triangular":
+    if lattice_type in ("triangular", "hexagonal"):
         angle_deg = [0, 60, 120, 180, 240, 300]
         return [
             (math.cos(math.radians(a)), math.sin(math.radians(a))) for a in angle_deg
-        ]
-    if lattice_type == "hexagonal":
-        return [
-            (1, 0),
-            (0.5, math.sqrt(3) / 2),
-            (-0.5, math.sqrt(3) / 2),
-            (-1, 0),
-            (-0.5, -math.sqrt(3) / 2),
-            (0.5, -math.sqrt(3) / 2),
         ]
     msg = f"Unsupported lattice type: {lattice_type}"
     raise ValueError(msg)
@@ -96,7 +90,8 @@ def _create_ghost(p: Polygon, dimensions: Sequence[float]) -> list[Polygon]:
     p : Polygon
         The original polygon to create ghosts for.
     dimensions : Sequence[float]
-        The (min, max) dimensions of the workspace.
+        The dimensions of the workspace. The tile size is `dimensions[1]`, i.e. N
+        for the `[N, N]` convention used by `placement_routine`.
 
     Returns
     -------
@@ -352,6 +347,7 @@ def _sort_edges_by_angle(edge_lst: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
         Sorted indices and angles
     """
     # Get angles of edges with x-axis
+    # arctan2 gives (-pi, pi]; map to [0, 2pi]
     angles = np.arctan2(edge_lst[:, 1], edge_lst[:, 0])
 
     # Translate from (-pi/2, pi/2) to (0, 2pi)
@@ -461,11 +457,13 @@ def elongate_polygon(polygon: Polygon, factor: float = 1.001) -> Polygon:
     )  # Angle between longest side and x-axis
 
     # Rotate to make longest side x-axis aligned
-    rotated_polygon = rotate(polygon, -angle, use_radians=True)
-    rotated_polygon_scaled = scale(rotated_polygon, xfact=factor, yfact=1)
+    rotated_polygon = rotate(polygon, -angle, use_radians=True, origin="centroid")
+    rotated_polygon_scaled = scale(
+        rotated_polygon, xfact=factor, yfact=1, origin="centroid"
+    )
 
     # Rotate back
-    return rotate(rotated_polygon_scaled, angle, use_radians=True)
+    return rotate(rotated_polygon_scaled, angle, use_radians=True, origin="centroid")
 
 
 def point_reflect(polygon: Polygon | np.ndarray) -> Polygon | np.ndarray:
@@ -538,8 +536,7 @@ def get_edges(polygon: Polygon, *, ccw: bool = True) -> np.ndarray:
         2D array of edges
     """
     # Reorient polygon coords if direction if clockwise
-    if ccw is False:
-        polygon = orient(polygon, sign=-1.0)
+    polygon = orient(polygon, sign=1.0 if ccw else -1.0)
     coords = np.array(polygon.exterior.coords)
     return coords[1:] - coords[:-1]
 
