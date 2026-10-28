@@ -18,7 +18,7 @@ import shapely.wkt
 from scipy.ndimage import binary_erosion
 from shapely import Polygon
 from shapely.affinity import translate
-from shapely.geometry import box
+from shapely.geometry import Point, box
 from shapely.ops import unary_union
 from sklearn.linear_model import LinearRegression
 from tqdm import tqdm, trange
@@ -759,8 +759,8 @@ def spawn(
     If `random_start` is False the provided `start` coordinate is returned
     repeated `k` times. Otherwise this function samples `k` free lattice
     centers with replacement, so positions may repeat. If `has_ghost` is True
-    the central (unpadded) region is used for sampling. The offset `max_dim`
-    is added to the returned positions in both cases.
+    the central (unpadded) region is used for sampling and the offset `max_dim`
+    is added to the returned positions.
 
     Parameters
     ----------
@@ -786,8 +786,9 @@ def spawn(
     random_start : bool, optional
         If False, return `start` repeated `k` times; otherwise sample.
     has_ghost : bool, optional
-        If True, sampling is performed on the central sub-region of the raster.
-        The offset of `max_dim` is applied to the returned positions either way.
+        If True, sampling is performed on the central sub-region of the raster
+        and the offset of `max_dim` is applied to the returned positions.
+        Otherwise the whole raster is used and positions are raster coordinates.
 
     Returns
     -------
@@ -798,11 +799,8 @@ def spawn(
     Raises
     ------
     RuntimeError
-        If `particle_radius` is given and no valid start location remains
-        after the start-area filtering.
-    ValueError
-        If no candidate location remains in the other cases (raised by
-        `rng.choice`). The number of candidates is not compared with `k`.
+        If no valid start location remains after filtering (raster, start area,
+        free centers). The number of candidates is not compared with `k`.
     """
     if not random_start:
         return np.full((k, 2), start, dtype=int)
@@ -845,14 +843,14 @@ def spawn(
         flat_idx = np.flatnonzero(valid_mask.ravel())
         candidates = np.column_stack((flat_idx // w, flat_idx % w))
 
-    # if len(candidates) < k:
-    #     msg = f"Not enough spawn points: {len(candidates)} available, {k} requested."
-    #     raise RuntimeError(msg)
+    if len(candidates) == 0:
+        msg = "No valid start location left after filtering"
+        raise RuntimeError(msg)
 
     idx = rng.choice(len(candidates), size=k, replace=True)
     start_local = candidates[idx]
 
-    return start_local + max_dim
+    return start_local + max_dim if has_ghost else start_local
 
 
 def _wrap_positions(pos: np.ndarray, offset: int, size: int) -> np.ndarray:
@@ -1238,6 +1236,29 @@ class ExperimentLattice:
         """
         Compute the free space for the experiment based on the configuration.
         """
+        # Config checks
+        if self.config.nsteps < 0:
+            msg = "config.nsteps must not be negative"
+            raise ValueError(msg)
+        if self.config.replicates < 1:
+            msg = "config.replicates must be at least one"
+            raise ValueError(msg)
+        if self.config.save_every < 1:
+            msg = "config.save_every must be at least one"
+            raise ValueError(msg)
+        if self.config.diff_coefficient <= 0:
+            msg = "config.diff_coefficient must be positive"
+            raise ValueError(msg)
+        if self.config.lattice_resolution < 1:
+            msg = "config.lattice_resolution must be at least one"
+            raise ValueError(msg)
+        if self.config.dimensions[0] != 0 or self.config.dimensions[1] <= 0:
+            msg = "config.dimensions must be (0, N) with N > 0"
+            raise ValueError(msg)
+        if self.config.particle_radius is not None and self.config.particle_radius < 0:
+            msg = "config.particle_radius must be None or non-negative"
+            raise ValueError(msg)
+
         self._config = deepcopy(self.config)
         raster_chosen_obstacles: np.ndarray | None = None
         free_raster_chosen_obstacles: np.ndarray | None = None
@@ -1258,6 +1279,12 @@ class ExperimentLattice:
                 buffer=buffer,
                 constraint_area=constraint_area,
             )
+            if not shapes:
+                msg = (
+                    "config.start_area_by_size matches"
+                    " no shape (comparison size and constraint areas)"
+                )
+                raise ValueError(msg)
             self._config.start_area = unary_union(shapes)
 
         if self._config.shift_origin:
@@ -1283,6 +1310,37 @@ class ExperimentLattice:
         min_dim_cov: float = min_dim
         max_dim_cov: float = max_dim
         union_shapes = unary_union(self._config.shapes)
+
+        # Geometry check after shift
+        domain = box(0, 0, max_dim, max_dim)
+        res = self._config.lattice_resolution
+        sx, sy = self._config.start
+        # The padding region around the domain is allowed (periodic images).
+        if not (
+            -max_dim <= sx * res < 2 * max_dim and -max_dim <= sy * res < 2 * max_dim
+        ):
+            msg = "config.start lies outside of the raster"
+            raise ValueError(msg)
+        if self._config.aim_area is not None and not domain.intersects(
+            self._config.aim_area
+        ):
+            msg = "config.aim_area lies outside of the domain"
+            raise ValueError(msg)
+        if (
+            self._config.random_start
+            and self._config.start_area is not None
+            and not domain.intersects(self._config.start_area)
+        ):
+            msg = "config.start_area lies outside of the domain"
+            raise ValueError(msg)
+        if (
+            not self._config.random_start
+            and not union_shapes.is_empty
+            and union_shapes.contains(Point(sx * res, sy * res))
+        ):
+            msg = "config.start lies inside of an obstacle"
+            raise ValueError(msg)
+
         workspace = box(min_dim, min_dim, max_dim, max_dim)
         if self._config.coverage_dimension:
             min_dim_cov, max_dim_cov = self._config.coverage_dimension
@@ -1290,6 +1348,21 @@ class ExperimentLattice:
         self.coverage = workspace.intersection(union_shapes).area / (
             max_dim_cov * max_dim_cov
         )
+
+        chosen_particles_by_area: list[BaseGeometry] = []
+        if self._config.chosen_obstacles_by_area:
+            config_shapes = self._config.shapes
+            if not config_shapes:
+                msg = "Cannot choose obstacle by area from empty shapes"
+                raise ValueError(msg)
+            chosen_particles_by_area = [
+                i
+                for i in config_shapes
+                if math.isclose(i.area, self._config.chosen_obstacles_by_area)
+            ]
+            if not chosen_particles_by_area:
+                msg = "config.chosen_obstacles_by_area matches no shape"
+                raise ValueError(msg)
 
         if self.config.has_ghost:
             raster = make_raster(
@@ -1302,15 +1375,6 @@ class ExperimentLattice:
             )
 
             if self._config.chosen_obstacles_by_area:
-                config_shapes = self._config.shapes
-                if not config_shapes:
-                    msg = "Cannot choose obstacle by area from empty shapes"
-                    raise ValueError(msg)
-                chosen_particles_by_area = [
-                    i
-                    for i in config_shapes
-                    if math.isclose(i.area, self._config.chosen_obstacles_by_area)
-                ]
                 raster_chosen_obstacles = make_raster(
                     unary_union(chosen_particles_by_area),
                     self._config.lattice_resolution,
@@ -1344,16 +1408,6 @@ class ExperimentLattice:
             )  # type: ignore
 
             if self._config.chosen_obstacles_by_area:
-                config_shapes = self._config.shapes
-                if not config_shapes:
-                    msg = "Cannot choose obstacle by area from empty shapes"
-                    raise ValueError(msg)
-                chosen_particles_by_area = [
-                    i
-                    for i in config_shapes
-                    if math.isclose(i.area, self._config.chosen_obstacles_by_area)
-                ]
-
                 raster_chosen_obstacles = make_raster(
                     unary_union(chosen_particles_by_area),
                     self._config.lattice_resolution,

@@ -134,13 +134,6 @@ def test_spawn_random_start_free_and_in_bounds():
     assert (raster[out[:, 0], out[:, 1]] == 0).all()
 
 
-@pytest.mark.xfail(
-    reason=(
-        "Low: spawn adds the max_dim offset even if has_ghost is False"
-        " (brownian_lattice.py:831)"
-    ),
-    strict=True,
-)
 def test_spawn_random_start_without_ghost_stays_in_raster():
     # Docstring: the offset is only applied when `has_ghost` is True.
     raster = np.zeros((20, 20), dtype=np.uint8)
@@ -158,16 +151,12 @@ def test_spawn_random_start_without_ghost_stays_in_raster():
     assert (out < 20).all()
 
 
-@pytest.mark.xfail(
-    reason=(
-        "Low: spawn samples with replace=True"
-        " (brownian_lattice.py:828) although the docstring says distinct"
-    ),
-    strict=True,
-)
-def test_spawn_random_start_samples_distinct_positions():
-    # Docstring: "samples `k` distinct free lattice centers".
-    raster = np.zeros((20, 20), dtype=np.uint8)
+def test_spawn_random_start_samples_with_replacement():
+    # k may exceed the number of free cells: replicates are independent walkers,
+    # so equal start positions are allowed.
+    raster = np.ones((30, 30), dtype=np.uint8)
+    raster[14, 14] = 0
+    raster[15, 15] = 0  # two free cells in the central region
     out = bl.spawn(
         raster,
         50,
@@ -178,7 +167,10 @@ def test_spawn_random_start_samples_distinct_positions():
         random_start=True,
         has_ghost=True,
     )
-    assert len({tuple(p) for p in out}) == 50
+    assert out.shape == (50, 2)
+    # the central region is raster[10:20, 10:20]; the offset max_dim = 10 is
+    # added to the local cells (4, 4) and (5, 5)
+    assert {tuple(p) for p in out} == {(14, 14), (15, 15)}
 
 
 # --------------------------------------------------------------------------
@@ -1063,18 +1055,29 @@ def test_chosen_requires_shapes():
         bl.ExperimentLattice(_config(chosen_obstacles_by_area=10.0))
 
 
-@pytest.mark.xfail(
-    reason=(
-        "Low: a chosen area that matches no shape is silently accepted"
-        " (brownian_lattice.py:1296-1314)"
-    ),
-    strict=True,
-)
-def test_chosen_area_without_match_raises():
+@pytest.mark.parametrize("has_ghost", [False, True])
+def test_chosen_area_without_match_raises(has_ghost):
     with pytest.raises(ValueError, match="chosen"):
         bl.ExperimentLattice(
-            _config(shapes=[box(5, 5, 8, 8)], chosen_obstacles_by_area=123.0)
+            _config(
+                shapes=[box(5, 5, 8, 8)],
+                chosen_obstacles_by_area=123.0,
+                has_ghost=has_ghost,
+            )
         )
+
+
+@pytest.mark.parametrize("has_ghost", [False, True])
+def test_chosen_area_with_match_builds_chosen_raster(has_ghost):
+    exp = bl.ExperimentLattice(
+        _config(
+            shapes=[box(5, 5, 8, 8), box(12, 12, 14, 14)],  # areas 9 and 4
+            chosen_obstacles_by_area=9.0,
+            has_ghost=has_ghost,
+        )
+    )
+    assert exp.raster_chosen_obstacles is not None
+    assert exp.raster_chosen_obstacles.sum() > 0
 
 
 @pytest.mark.xfail(
@@ -1361,13 +1364,6 @@ def test_spawn_random_start_uniform_without_obstacles():
     assert counts.max() < 500  # 400 expected per row
 
 
-@pytest.mark.xfail(
-    reason=(
-        "Low: spawn raises an obscure ValueError (empty rng.choice) instead of the"
-        " documented RuntimeError for a fully blocked region (brownian_lattice.py:828)"
-    ),
-    strict=True,
-)
 def test_spawn_all_blocked_raises_runtime_error():
     raster = np.ones((30, 30), dtype=np.uint8)
     with pytest.raises(RuntimeError):
@@ -1383,13 +1379,6 @@ def test_spawn_all_blocked_raises_runtime_error():
         )
 
 
-@pytest.mark.xfail(
-    reason=(
-        "Low: same obscure ValueError when erosion leaves no valid centre"
-        " (brownian_lattice.py:816-828)"
-    ),
-    strict=True,
-)
 def test_spawn_erosion_leaves_no_center_raises():
     raster = np.zeros((30, 30), dtype=np.uint8)  # free cells exist ...
     no_centers = np.zeros((30, 30), dtype=bool)  # ... but no particle fits
@@ -1485,7 +1474,8 @@ def test_run_shapes_in_raster_frame():
     ],
 )
 def test_experiment_coverage_value(shapes, covered):
-    exp = bl.ExperimentLattice(_config(shapes=shapes))
+    # the start must not lie inside a shape
+    exp = bl.ExperimentLattice(_config(shapes=shapes, start=(18, 18)))
     assert exp.coverage == pytest.approx(covered / 400)
 
 
@@ -2190,80 +2180,53 @@ def test_start_area_and_start_area_by_size_conflict_raises():
         )
 
 
-_NO_VALIDATION = pytest.mark.xfail(
-    reason=(
-        "Low: no input validation; invalid values give an obscure error or are"
-        " accepted silently (ExperimentLatticeConfig / ExperimentLattice)"
-    ),
-    strict=True,
-)
-
-
 @pytest.mark.parametrize(
     ("overrides", "names"),
     [
-        pytest.param({"nsteps": -3}, "nsteps", marks=_NO_VALIDATION, id="nsteps<0"),
-        pytest.param(
-            {"replicates": 0}, "replicates", marks=_NO_VALIDATION, id="replicates=0"
-        ),
-        pytest.param(
-            {"save_every": 0}, "save_every", marks=_NO_VALIDATION, id="save_every=0"
-        ),
-        pytest.param(
-            {"save_every": -1}, "save_every", marks=_NO_VALIDATION, id="save_every<0"
-        ),
+        pytest.param({"nsteps": -3}, "nsteps", id="nsteps<0"),
+        pytest.param({"replicates": 0}, "replicates", id="replicates=0"),
+        pytest.param({"save_every": 0}, "save_every", id="save_every=0"),
+        pytest.param({"save_every": -1}, "save_every", id="save_every<0"),
         pytest.param(
             {"diff_coefficient": 0},
             "diff_coefficient",
-            marks=_NO_VALIDATION,
             id="D=0",
         ),
         pytest.param(
             {"diff_coefficient": -1},
             "diff_coefficient",
-            marks=_NO_VALIDATION,
             id="D<0",
         ),
         pytest.param(
             {"lattice_resolution": 0},
             "lattice_resolution",
-            marks=_NO_VALIDATION,
             id="resolution=0",
         ),
-        pytest.param(
-            {"dimensions": (0, 0)}, "dimensions", marks=_NO_VALIDATION, id="dims=0"
-        ),
+        pytest.param({"dimensions": (0, 0)}, "dimensions", id="dims=0"),
         pytest.param(
             {"dimensions": (10, 50)},
             "dimensions",
-            marks=_NO_VALIDATION,
             id="dims-min!=0",
         ),
         pytest.param(
             {"particle_radius": -2},
             "particle_radius",
-            marks=_NO_VALIDATION,
             id="radius<0",
         ),
-        pytest.param(
-            {"start": (500, 500)}, "start", marks=_NO_VALIDATION, id="start-outside"
-        ),
+        pytest.param({"start": (500, 500)}, "start", id="start-outside"),
         pytest.param(
             {"aim_area": box(500, 500, 510, 510)},
             "aim_area",
-            marks=_NO_VALIDATION,
             id="aim-outside",
         ),
         pytest.param(
             {"random_start": True, "start_area": box(500, 500, 510, 510)},
             "start_area",
-            marks=_NO_VALIDATION,
             id="start_area-outside",
         ),
         pytest.param(
             {"shapes": [box(8, 8, 14, 14)], "start": (10, 10)},
             "start",
-            marks=_NO_VALIDATION,
             id="start-in-obstacle",
         ),
     ],
@@ -2272,6 +2235,31 @@ def test_invalid_config_raises_value_error(overrides, names):
     # A clear ValueError that names the offending parameter is expected.
     with pytest.raises(ValueError, match=names):
         bl.ExperimentLattice(_config(**overrides)).run()
+
+
+@pytest.mark.parametrize("has_ghost", [False, True])
+def test_start_outside_raster_raises_in_both_modes(has_ghost):
+    with pytest.raises(ValueError, match="start"):
+        bl.ExperimentLattice(_config(start=(500, 500), has_ghost=has_ghost))
+
+
+def test_start_on_obstacle_border_is_accepted():
+    # contains() is False on the boundary: only a start strictly inside is rejected
+    cfg = _config(shapes=[box(8, 8, 14, 14)], start=(8, 8), nsteps=2)
+    assert len(bl.ExperimentLattice(cfg).run().trajectories) == 10
+
+
+def test_start_inside_obstacle_is_accepted_with_random_start():
+    # a random start is drawn from the free cells, so the fixed start is unused
+    cfg = _config(
+        shapes=[box(8, 8, 14, 14)], start=(10, 10), random_start=True, nsteps=2
+    )
+    assert len(bl.ExperimentLattice(cfg).run().trajectories) == 10
+
+
+def test_start_in_padding_region_is_accepted():
+    cfg = _config(start=(-5, -5), nsteps=2)
+    assert len(bl.ExperimentLattice(cfg).run().trajectories) == 10
 
 
 @pytest.mark.xfail(
@@ -2302,16 +2290,6 @@ def test_random_start_covers_full_domain_when_dims_not_multiple():
     y, x = _first_positions(exp.run())
     assert y[0].max() == 12
     assert x[0].max() == 12
-
-
-@pytest.mark.xfail(
-    reason="Low: mean_trajectories raises IndexError for zero replicates",
-    strict=True,
-)
-def test_replicates_zero_mean_trajectories():
-    run = bl.ExperimentLattice(_config(replicates=0)).run()
-    with pytest.raises(ValueError, match="replicates|trajector"):
-        run.mean_trajectories()
 
 
 # ==========================================================================
@@ -2453,7 +2431,7 @@ def test_wrap_ghost_mode_random_start_stays_in_tile():
 def test_shift_origin_moves_shapes_aim_and_start_together():
     cfg = _config(
         dimensions=(0, 40),
-        shapes=[box(-5, -5, 5, 5)],
+        shapes=[box(8, 8, 12, 12)],  # next to the start, which must stay free
         aim_area=Point(0, 0).buffer(3),
         start=(0, 0),
         shift_origin=True,
@@ -2463,7 +2441,7 @@ def test_shift_origin_moves_shapes_aim_and_start_together():
     exp = bl.ExperimentLattice(cfg)
     run = exp.run()
     # origin -> domain centre (20) -> raster frame (+ 40)
-    assert run.shapes[0].bounds == (55.0, 55.0, 65.0, 65.0)
+    assert run.shapes[0].bounds == (68.0, 68.0, 72.0, 72.0)
     assert np.argwhere(exp.aim_mask).mean(axis=0) == pytest.approx([60, 60], abs=0.6)
     assert run.trajectories[0].data[["Y", "X"]].iloc[0].tolist() == [60, 60]
     assert run.mean_trajectories()["Aim"].iloc[0] == 1.0
@@ -2473,7 +2451,7 @@ def test_shift_origin_resolution_two_start_matches_aim_and_shapes():
     cfg = _config(
         dimensions=(0, 40),
         lattice_resolution=2,
-        shapes=[box(-5, -5, 5, 5)],
+        shapes=[box(8, 8, 12, 12)],  # next to the start, which must stay free
         aim_area=Point(0, 0).buffer(3),
         start=(0, 0),
         shift_origin=True,
@@ -2491,13 +2469,13 @@ def test_shift_origin_resolution_two_start_matches_aim_and_shapes():
 def test_shift_origin_does_not_mutate_config():
     cfg = _config(
         dimensions=(0, 40),
-        shapes=[box(-5, -5, 5, 5)],
+        shapes=[box(8, 8, 12, 12)],
         aim_area=Point(0, 0).buffer(3),
         start=(0, 0),
         shift_origin=True,
     )
     bl.ExperimentLattice(cfg)
-    assert cfg.shapes[0].bounds == (-5.0, -5.0, 5.0, 5.0)
+    assert cfg.shapes[0].bounds == (8.0, 8.0, 12.0, 12.0)
     assert cfg.aim_area.bounds == Point(0, 0).buffer(3).bounds
     assert cfg.start == (0, 0)
 
@@ -2646,13 +2624,6 @@ def test_start_area_by_size_ring_around_matching_shape():
     assert min(far.distance(p) for p in points) > 5.0
 
 
-@pytest.mark.xfail(
-    reason=(
-        "Low: start_area_by_size matching no shape is silently ignored"
-        " (brownian_lattice.py:1273,1323)"
-    ),
-    strict=True,
-)
 def test_start_area_by_size_without_match_raises():
     cfg = _config(
         shapes=[box(5, 5, 9, 9)],
