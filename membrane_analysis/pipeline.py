@@ -41,9 +41,9 @@ def _iter_conditions(
                 mv=mv,
                 cg=None,
                 crystal_prot=None,
-                test="crystal_{pkey}_{nprot}_regularTrue_{mv}*",
+                test=f"crystal_{pkey}_{nprot}_regularTrue_{str_mv}*",
             )
-    if scenario.cdegree is None:
+    elif scenario.cdegree is None:
         file_lst = list((out_root / pkey).glob(f"*_{nprot}-*.wkt"))
         yield Condition(
             key=(pkey, nprot),

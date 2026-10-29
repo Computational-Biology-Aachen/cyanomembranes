@@ -9,14 +9,31 @@ import cyanomembranes as cm
 from .config import Condition
 
 
+def _mv_str(mv) -> str:
+    """File-name part of the membrane variation: always with a decimal point.
+
+    The value is read back from a CSV as a float, so 2 and 2.0 must give the same
+    name ("2.0", as the floats written by the scenarios always did).
+    """
+    return str(float(mv))
+
+
+def _cg_str(cg) -> str:
+    """File-name part of the crystal degree: 0 -> "0", 0.4 -> "0.4", 1.0 -> "1".
+
+    An integer 0 in a scenario and the 0.0 read back from a CSV give the same name.
+    """
+    return f"{cg:g}"
+
+
 def _timeseries_filename(condition: Condition, with_mv: bool = False) -> str:
     if condition.cg is not None:
         parts = [
             condition.pkey,
             str(condition.nprot),
             condition.crystal_prot,
-            str(condition.mv),
-            str(condition.cg),
+            _mv_str(condition.mv),
+            _cg_str(condition.cg),
         ]
     else:
         parts = [
@@ -25,7 +42,7 @@ def _timeseries_filename(condition: Condition, with_mv: bool = False) -> str:
         ]
 
         if with_mv:
-            parts.append(str(condition.mv))
+            parts.append(_mv_str(condition.mv))
 
     return "_".join(parts) + ".csv"
 
@@ -75,6 +92,37 @@ def rdf(polygons, n_bins, box_size, r_max=None, ghosts=True):
 
 
 def nndf(polygons, n_bins, box_size, r_max=None, ghosts=True):
+    """Nearest-neighbour distance distribution of a periodic point set.
+
+    Parameters
+    ----------
+    polygons : np.ndarray
+        Centroids, shape (n, 2). With `ghosts` the array holds nine periodic
+        copies of the box and the first ninth must be the originals.
+    n_bins : int
+        Number of distance bins between 0 and `r_max`.
+    box_size : float
+        Edge length of the periodic box.
+    r_max : float | None, optional
+        Largest distance, at most `box_size / 2` (default `box_size / 2`).
+    ghosts : bool, optional
+        If True, only the first ninth of `polygons` are used as reference points.
+
+    Returns
+    -------
+    tuple
+        `G_empirical` (cumulative fraction of particles with a nearest neighbour
+        within r), `G_std`, `g_nn_empirical` (density per bin), `g_nn_std`, and
+        the bin centres.
+
+    Notes
+    -----
+    `G_std` is the binomial standard error `sqrt(G (1 - G) / N)`. It assumes
+    independent nearest-neighbour distances and therefore slightly underestimates
+    the scatter (about 0.7 to 1.0 of it for an ideal gas), because two particles
+    that are each other's nearest neighbour are counted twice. `g_nn_std` is the
+    binomial error of a single bin.
+    """
 
     N = len(polygons)
 
@@ -106,7 +154,7 @@ def nndf(polygons, n_bins, box_size, r_max=None, ghosts=True):
     g_nn_std = np.sqrt(N * p * (1 - p)) / (N * dr)
 
     G_empirical = np.cumsum(counts) / N
-    G_std = np.sqrt(np.cumsum(N * p * (1 - p))) / N
+    G_std = np.sqrt(G_empirical * (1 - G_empirical) / N)
 
     return G_empirical, G_std, g_nn_empirical, g_nn_std, bin_centers
 

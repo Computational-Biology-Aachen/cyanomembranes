@@ -13,7 +13,7 @@ from membrane_analysis.config import (
     AnalysisType,
 )
 
-from .utils import _timeseries_filename
+from .utils import _cg_str, _mv_str, _timeseries_filename
 
 
 def plot_individual_runs(run, condition, scenario, new_out, aim=False):
@@ -368,12 +368,9 @@ def _timeseries_filename_from_row(row):
     parts = [row["pkey"], str(int(row["nprot"]))]
     if "crystal_prot" in row and not pd.isna(row["crystal_prot"]):
         parts.append(row["crystal_prot"])
-    parts.append(str(row["mv"]))
+    parts.append(_mv_str(row["mv"]))
     if "cg" in row and not pd.isna(row["cg"]):
-        if row["cg"] == 0.0:
-            parts.append(str(0))
-        else:
-            parts.append(str(row["cg"]))
+        parts.append(_cg_str(row["cg"]))
     return "_".join(parts) + ".csv"
 
 
@@ -438,7 +435,7 @@ def _plot_fpt_crystals(scenario, scalars, new_out, pic_out):
                         ax.plot(
                             ts_df["Time"] * scenario.time_scale,
                             ts_df["Active"],
-                            label=f"{int(row['cg']*100)}",
+                            label=f"{round(row['cg']*100)}",
                             linewidth=2,
                             alpha=0.7,
                             color=color,
@@ -453,13 +450,13 @@ def _plot_fpt_crystals(scenario, scalars, new_out, pic_out):
                         )
 
                     ax.set_title(
-                        f"nprot={int(nprot)} - coverage = {int(coverage*100)}%",
+                        f"nprot={int(nprot)} - coverage = {round(coverage*100)}%",
                         fontsize=8,
                     )
                     _finalise_fpt_ax(ax, scenario)
 
                     ax2.set_title(
-                        f"nprot={int(nprot)} - coverage = {int(coverage*100)}%",
+                        f"nprot={int(nprot)} - coverage = {round(coverage*100)}%",
                         fontsize=8,
                     )
                     _finalise_fpt_ax2(ax2, scenario)
@@ -617,19 +614,22 @@ def _plot_rate_crystals(scenario, scalars, new_out, pic_out):
 
 def _plot_rate_constants(scenario, scalars, pic_out):
     fig, ax = plt.subplots(figsize=(3.2, 2.5))
-    color_iter = iter(COLORBLIND_PALETTE)
 
-    group_cols = ["crystal_prot", "cg"] if scenario.cdegree is not None else ["pkey"]
+    # a single column name (not a list) gives plain keys instead of 1-tuples
+    group_cols = ["crystal_prot", "cg"] if scenario.cdegree is not None else "pkey"
 
-    for group_key, group in scalars.groupby(group_cols):
+    for i, (group_key, group) in enumerate(scalars.groupby(group_cols)):
         group = group.sort_values("mean_coverage")
-        color = next(color_iter)
+        color = COLORBLIND_PALETTE[i % len(COLORBLIND_PALETTE)]
         if scenario.cdegree is not None:
             crystal_prot, cg = group_key
-            label = f"{LABEL_DICT.get(crystal_prot, crystal_prot)}, {int(cg*100)}"
+            label = f"{LABEL_DICT.get(crystal_prot, crystal_prot)}, {round(cg*100)}"
         else:
             label = LABEL_DICT.get(group_key, group_key)
 
+        # Error bars: k_std is the standard deviation of the rate over the last
+        # `steady_state_window` save intervals (its fluctuation in the steady state),
+        # not a standard error of the mean.
         ax.errorbar(
             group["mean_coverage"] * 100,
             group["k_mean"],
@@ -639,16 +639,16 @@ def _plot_rate_constants(scenario, scalars, pic_out):
             capsize=5,
         )
 
-        ax.set_xlabel("% coverage", fontsize=8)
-        ax.set_ylabel("Rate constant k [1/s]", fontsize=8)
-        ax.tick_params(labelsize=7)
-        ax.spines["top"].set_visible(False)
-        ax.spines["right"].set_visible(False)
-        ax.legend(title="% in array", loc="upper left", fontsize=7)
-        ax.tick_params(direction="in")
-        fig.tight_layout()
-        fig.savefig(pic_out / "rate_constant.png", dpi=300)
-        plt.close(fig)
+    ax.set_xlabel("% coverage", fontsize=8)
+    ax.set_ylabel("Rate constant k [1/s]", fontsize=8)
+    ax.tick_params(labelsize=7)
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+    ax.legend(title="% in array", loc="upper left", fontsize=7)
+    ax.tick_params(direction="in")
+    fig.tight_layout()
+    fig.savefig(pic_out / "rate_constant.png", dpi=300)
+    plt.close(fig)
 
 
 def plot_rate(scenario, out_root):
