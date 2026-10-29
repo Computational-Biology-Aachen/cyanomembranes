@@ -89,7 +89,7 @@ def plot_diffusion(scenario, out_root):
         lm2 = LinearRegression().fit(x2.reshape(-1, 1), y)
         x_fit2 = np.linspace(0, max(x2), len(x2))
         y_fit_curve2 = lm2.predict(x_fit2.reshape(-1, 1))
-        r22 = lm.score(x.reshape(-1, 1), y)
+        r22 = lm2.score(x2.reshape(-1, 1), y)
 
         parameter_rows.append(
             {
@@ -226,7 +226,7 @@ def plot_diffusion(scenario, out_root):
         plt.close(fig2)
 
         if MAD_indicator == 1293:
-            ax3.set_ylabel(r"$\sqrt{\mathrm{MSD}}/\mathrm{MAD}$", fontsize=12)
+            ax3.set_ylabel(r"$\mathrm{MAD}/\sqrt{\mathrm{MSD}}$", fontsize=12)
             # ax3.set_xlabel(scenario.time_label, fontsize=12)
             ax3.set_xlabel(r"$\sqrt{\mathrm{MSD}} / \mathrm{\AA}$", fontsize=12)
             ax3.tick_params(labelsize=10)

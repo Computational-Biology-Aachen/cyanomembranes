@@ -208,10 +208,14 @@ def cluster_sizes(
         2 * max_dim,
         2 * max_dim,
     )
-    smaller_raster = raster[5000 : 2 * max_dim, 5000 : 2 * max_dim]
+    n = int(max_dim / resolution)
+    smaller_raster = raster[n : 2 * n, n : 2 * n]
     particle = cm.brownian_lattice._make_lattice_particle(particle_radius)
     free = smaller_raster == 0
+    pad = particle.shape[0] // 2
+    free = np.pad(free, pad, mode="wrap")
     accessible = binary_erosion(free, structure=particle)
+    accessible = accessible[pad : pad + n, pad : pad + n]
     sizes = flood_fill(~accessible)
 
     return (

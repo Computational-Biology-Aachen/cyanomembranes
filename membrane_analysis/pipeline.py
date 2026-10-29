@@ -235,7 +235,15 @@ def build_diffusion_metrics(
         / (4 * exp_config.diff_coefficient)
     )
     norm_diff_dist.iloc[0] = 1.0
-    sqrt_msd = np.sqrt(run_dif["MSD"])
+
+    msd = exp_config.lattice_resolution**2 * df["MSD"]
+    msd_ci_low = exp_config.lattice_resolution**2 * df["MSD_ci_low"]
+    msd_ci_high = exp_config.lattice_resolution**2 * df["MSD_ci_high"]
+    sqrt_msd = np.sqrt(msd)
+
+    mad = exp_config.lattice_resolution * df["MAD"]
+    mad_ci_low = exp_config.lattice_resolution * df["MAD_ci_low"]
+    mad_ci_high = exp_config.lattice_resolution * df["MAD_ci_high"]
 
     last_D_dist = norm_diff_dist.iloc[-1]
     last_D_dist_ci_low = norm_diff_dist_ci_low.iloc[-1]
@@ -258,8 +266,16 @@ def build_diffusion_metrics(
     )
 
     timeseries = df[
-        ["Time", "MSD", "MSD_ci_low", "MSD_ci_high", "MAD", "MAD_ci_low", "MAD_ci_high"]
+        ["Time"]
     ].copy()
+    timeseries["MSD"] = msd
+    timeseries["MSD_ci_low"] = msd_ci_low
+    timeseries["MSD_ci_high"] = msd_ci_high
+
+    timeseries["MAD"] = mad
+    timeseries["MAD_ci_low"] = mad_ci_low
+    timeseries["MAD_ci_high"] = mad_ci_high
+    
     timeseries["Sqrt_MSD"] = sqrt_msd
     timeseries["Norm_Diff_Dist"] = norm_diff_dist
     timeseries["Norm_Diff_Dist_ci_low"] = norm_diff_dist_ci_low
