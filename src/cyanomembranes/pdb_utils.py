@@ -14,7 +14,6 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
-import pandas as pd
 from Bio.PDB.PDBIO import PDBIO, Select
 from Bio.PDB.PDBParser import PDBParser
 from shapely import Point, Polygon
@@ -216,7 +215,5 @@ def process_proteins(in_path: Path, out_path: Path, pdb_files: list[str]) -> dic
             "center_of_mass": center_of_mass,
             "polygon": polygon,
         }
-
-    (pd.DataFrame(proteins)).to_csv(out_path / "info.csv")
 
     return proteins

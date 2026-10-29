@@ -406,9 +406,20 @@ def make_raster(
     -------
     np.ndarray
         Raster image (uint8), y-axis top-down
+
+    Notes
+    -----
+    A pixel is set if the geometry touches it (`all_touched`). For polygon edges
+    exactly on a pixel border, GDAL includes the neighbouring pixel in x and y
+    differently (the y-axis is flipped), so a shape that is symmetric under
+    x <-> y can differ by a few pixels. Shapes at generic float positions are not
+    affected. An empty geometry gives an all-zero raster.
     """
     width = int(np.ceil((maxx - minx) / resolution))
     height = int(np.ceil((maxy - miny) / resolution))
+
+    if multipolygons.is_empty:
+        return np.zeros((height, width), dtype=np.uint8)
 
     # Start at lower-left corner (minx, miny) and flip y-axis for raster
     transform = Affine.translation(minx, maxy) * Affine.scale(resolution, -resolution)

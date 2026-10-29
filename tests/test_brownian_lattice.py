@@ -449,17 +449,23 @@ def test_run_reproducible_with_config_rng():
     pd.testing.assert_frame_equal(first.mean_trajectories(), again.mean_trajectories())
 
 
-@pytest.mark.xfail(
-    reason=(
-        "Low: worker passes config.replicates to spawn instead of nreps"
-        " (brownian_lattice.py:1427)"
-    ),
-    strict=True,
-)
 def test_worker_nreps_differs_from_replicates():
     exp = bl.ExperimentLattice(_config(replicates=6))
     trajectories, _, _, _ = exp.worker(4)
     assert len(trajectories) == 4
+
+
+@pytest.mark.parametrize("random_start", [False, True])
+def test_worker_runs_exactly_nreps_walkers(random_start):
+    exp = bl.ExperimentLattice(_config(replicates=6, random_start=random_start))
+    trajectories, fpt, _, _ = exp.worker(3)
+    assert len(trajectories) == 3
+    assert len(fpt) == 3
+
+
+def test_run_uses_all_replicates():
+    run = bl.ExperimentLattice(_config(replicates=6, nsteps=2)).run()
+    assert len(run.trajectories) == 6
 
 
 # --------------------------------------------------------------------------
@@ -1080,17 +1086,30 @@ def test_chosen_area_with_match_builds_chosen_raster(has_ghost):
     assert exp.raster_chosen_obstacles.sum() > 0
 
 
-@pytest.mark.xfail(
-    reason=(
-        "Low: steady state without chosen obstacles gives hits=None but"
-        " waiting_times=[] (brownian_lattice.py:1122)"
-    ),
-    strict=True,
-)
 def test_steady_state_without_chosen_obstacles_is_consistent():
     run = bl.ExperimentLattice(_config(steady_state_chosen_obstacle=True)).run()
     assert run.hits is None
     assert run.waiting_times is None
+
+
+def test_steady_state_with_chosen_obstacles_but_no_hit_gives_empty_results():
+    # Only "no chosen obstacles" gives None: a run without any hit has a table and
+    # an empty array of waiting times.
+    chosen = box(30, 30, 34, 34)
+    cfg = _config(
+        dimensions=(0, 40),
+        shapes=[chosen],
+        chosen_obstacles_by_area=chosen.area,
+        steady_state_chosen_obstacle=True,
+        start=(5, 5),
+        replicates=5,
+        nsteps=2,
+    )
+    run = bl.ExperimentLattice(cfg).run()
+    assert isinstance(run.hits, pd.DataFrame)
+    assert (run.hits.drop(columns="Time") == 0).all().all()
+    assert isinstance(run.waiting_times, np.ndarray)
+    assert run.waiting_times.size == 0
 
 
 def test_run_structure_steady_vs_terminating():
@@ -1479,18 +1498,19 @@ def test_experiment_coverage_value(shapes, covered):
     assert exp.coverage == pytest.approx(covered / 400)
 
 
-@pytest.mark.xfail(
-    reason=(
-        "Low: coverage_dimension=(a, b) with a != 0 is divided by b**2 instead of"
-        " (b - a)**2 (brownian_lattice.py:1240-1242)"
-    ),
-    strict=True,
-)
 def test_coverage_dimension_full_cover():
     exp = bl.ExperimentLattice(
         _config(shapes=[box(5, 5, 15, 15)], coverage_dimension=(5, 15))
     )
     assert exp.coverage == pytest.approx(1.0)
+
+
+def test_coverage_dimension_half_cover():
+    # the window (5, 15) has the area 100, the shape covers its left half
+    exp = bl.ExperimentLattice(
+        _config(shapes=[box(5, 5, 10, 15)], coverage_dimension=(5, 15))
+    )
+    assert exp.coverage == pytest.approx(0.5)
 
 
 def test_plot_run_shows_obstacles_in_world_coordinates():
@@ -2262,34 +2282,41 @@ def test_start_in_padding_region_is_accepted():
     assert len(bl.ExperimentLattice(cfg).run().trajectories) == 10
 
 
-@pytest.mark.xfail(
-    reason=(
-        "Low: a particle radius larger than the raster is not rejected; radius 500"
-        " ran out of memory in a probe (freeze risk), radius is in lattice cells"
-    ),
-    strict=True,
-)
-def test_particle_radius_larger_than_raster_is_rejected():
-    # Radius 40 cells in a 60 x 60 raster; the probe radius 500 is not run here.
+def test_particle_radius_larger_than_domain_is_rejected():
+    # Radius 40 cells in a domain of 20 cells; the probe radius 500 (out of memory)
+    # is not run here.
     with pytest.raises(ValueError, match="particle_radius"):
         bl.ExperimentLattice(_config(particle_radius=40))
 
 
-@pytest.mark.xfail(
-    reason=(
-        "Low: dimensions that are not a multiple of lattice_resolution leave the last"
-        " domain row/column out of random starts (brownian_lattice.py:1366-1368)"
-    ),
-    strict=True,
-)
-def test_random_start_covers_full_domain_when_dims_not_multiple():
-    cfg = _config(
-        lattice_resolution=3, random_start=True, replicates=2000, nsteps=1
-    )  # 20 / 3 -> 7 domain cells on raster indices 6..12
-    exp = bl.ExperimentLattice(cfg)
-    y, x = _first_positions(exp.run())
-    assert y[0].max() == 12
-    assert x[0].max() == 12
+def test_particle_radius_that_fits_is_accepted():
+    cfg = _config(particle_radius=3, nsteps=2)  # 7 cells in a domain of 20
+    assert len(bl.ExperimentLattice(cfg).run().trajectories) == 10
+
+
+@pytest.mark.parametrize(("radius", "fits"), [(4, True), (5, False)])
+def test_particle_radius_is_checked_in_lattice_cells(radius, fits):
+    # dimensions 20 at resolution 2 are 10 cells: a radius of 5 needs 11 cells
+    cfg = _config(lattice_resolution=2, particle_radius=radius, nsteps=2)
+    if fits:
+        bl.ExperimentLattice(cfg)
+    else:
+        with pytest.raises(ValueError, match="particle_radius"):
+            bl.ExperimentLattice(cfg)
+
+
+def test_dimensions_not_multiple_of_resolution_raises():
+    # 20 / 3 would be 6.67 cells: rejected instead of leaving the last domain
+    # row and column out of the random starts
+    with pytest.raises(ValueError, match="dimensions"):
+        bl.ExperimentLattice(
+            _config(lattice_resolution=3, random_start=True, replicates=5, nsteps=1)
+        )
+
+
+def test_dimensions_multiple_of_resolution_is_accepted():
+    cfg = _config(lattice_resolution=4, random_start=True, replicates=5, nsteps=1)
+    assert len(bl.ExperimentLattice(cfg).run().trajectories) == 5
 
 
 # ==========================================================================
@@ -2859,30 +2886,28 @@ def test_zero_msd_gives_zero_diff_coefficient():
     assert (dist["D_dist"].iloc[1:] == 0).all()
 
 
-@pytest.mark.xfail(
-    reason=(
-        "Low: the power-law fit raises an obscure scikit-learn error for an all-zero"
-        " MSD (log(0)) (brownian_lattice.py:318-323)"
-    ),
-    strict=True,
-)
-@pytest.mark.filterwarnings("ignore::RuntimeWarning")
 def test_pw_fit_with_zero_msd_raises_clear_error():
     with pytest.raises(ValueError, match="MSD"):
         _enclosed_run().get_mean_diff_coefficients_pw()
 
 
-@pytest.mark.xfail(
-    reason=(
-        "Low: the power-law fit raises an obscure scikit-learn error when there is no"
-        " time point after t=0 (brownian_lattice.py:318-323)"
-    ),
-    strict=True,
-)
 def test_pw_fit_with_single_time_point_raises_clear_error():
     run = bl.ExperimentLattice(_config(nsteps=0)).run()
     with pytest.raises(ValueError, match="time points"):
         run.get_mean_diff_coefficients_pw()
+
+
+def test_pw_fit_needs_two_points_after_start():
+    run = bl.ExperimentLattice(_config(nsteps=1)).run()
+    with pytest.raises(ValueError, match="time points"):
+        run.get_mean_diff_coefficients_pw()
+
+
+def test_ensemble_pw_fit_raises_without_time_points(tmp_path):
+    files = _write_files(tmp_path, [[box(2, 2, 4, 4)], [box(3, 2, 5, 4)]])
+    ensemble = _run_inline(files, _ensemble_config(nsteps=0, replicates=5))
+    with pytest.raises(ValueError, match="time points"):
+        ensemble.get_mean_diff_coefficients_pw()
 
 
 def test_diff_coefficient_with_only_start_point():
@@ -2995,25 +3020,24 @@ def test_plot_run_scatter_and_lines():
     mpl.pyplot.close("all")
 
 
-@pytest.mark.xfail(
-    reason=(
-        "Low: plot_run(aim_area=True, steps=n) limits each colour to n points,"
-        " not the first n time steps (brownian_lattice.py:419-467)"
-    ),
-    strict=True,
-)
 def test_plot_run_steps_limits_time_steps_in_aim_mode():
     run = _plot_run()
     ax = run.plot_run(aim_area=True, steps=10)
-    drawn = len(ax.collections[0].get_offsets()) + len(ax.collections[1].get_offsets())
-    assert drawn == 10
+    # two colours per trajectory (3 replicates): together 10 points each
+    drawn = sum(len(c.get_offsets()) for c in ax.collections)
+    assert drawn == 3 * 10
     mpl.pyplot.close("all")
 
 
-@pytest.mark.xfail(
-    reason="Low: plot_run without store_history raises a bare KeyError",
-    strict=True,
-)
+@pytest.mark.parametrize("has_ghost", [False, True])
+@pytest.mark.parametrize("aim", [False, True])
+def test_plot_run_steps_limits_points_in_both_ghost_modes(has_ghost, aim):
+    run = _plot_run(has_ghost=has_ghost)
+    ax = run.plot_run(aim_area=aim, steps=10, scatter=True)
+    assert sum(len(c.get_offsets()) for c in ax.collections) == 3 * 10
+    mpl.pyplot.close("all")
+
+
 def test_plot_run_without_history_raises_clear_error():
     run = bl.ExperimentLattice(_config(store_history=False, replicates=3)).run()
     with pytest.raises(ValueError, match="store_history"):

@@ -185,6 +185,27 @@ def make_aim_mask(
     return mask
 
 
+def _power_law_inputs(
+    time: np.ndarray, msd: np.ndarray
+) -> tuple[np.ndarray, np.ndarray]:
+    """Log-transform time and MSD for the power-law fit, without the t=0 row.
+
+    Raises
+    ------
+    ValueError
+        If fewer than two time points are left after t=0 or if the MSD is not
+        positive everywhere (the logarithm is undefined for zero).
+    """
+    time, msd = time[1:], msd[1:]
+    if time.size < 2:  # noqa: PLR2004
+        msg = "power-law fit needs at least two time points after t=0"
+        raise ValueError(msg)
+    if not np.all(msd > 0):
+        msg = "power-law fit needs a positive MSD at all time points after t=0"
+        raise ValueError(msg)
+    return np.log(time).reshape(-1, 1), np.log(msd)
+
+
 @dataclass
 class DiffusionLatticeTrajectories:
     """
@@ -325,8 +346,9 @@ class ExperimentLatticeRun:
             and the scaling exponent (slope).
         """
         mean_traj_df = self.mean_trajectories()
-        x_var = np.log(mean_traj_df["Time"].to_numpy().reshape(-1, 1)[1:])
-        y_var = np.log(mean_traj_df["MSD"].to_numpy()[1:])
+        x_var, y_var = _power_law_inputs(
+            mean_traj_df["Time"].to_numpy(), mean_traj_df["MSD"].to_numpy()
+        )
         pw = LinearRegression(fit_intercept=intercept)
         pw.fit(x_var, y_var)
         return pw, math.exp(pw.intercept_), pw.coef_[0]
@@ -421,12 +443,27 @@ class ExperimentLatticeRun:
         aim_area : bool, optional
             If True, mark points where trajectories are inside the aim area
             using a different color; otherwise draw full trajectories.
+        scatter : bool, optional
+            If True, draw the points of the trajectories as a scatter plot
+            instead of lines.
+        steps : int | None, optional
+            If given, only the first `steps` time steps of each trajectory are
+            drawn (before the points are split by the aim area).
 
         Returns
         -------
         Axes
             The Matplotlib Axes with the plotted trajectories.
+
+        Raises
+        ------
+        ValueError
+            If the trajectories carry no positions (the experiment was run
+            without `store_history=True`).
         """
+        if self.trajectories and "X" not in self.trajectories[0].data.columns:
+            msg = "plot_run needs the positions: run with store_history=True"
+            raise ValueError(msg)
         if ax is None:
             _, ax = plt.subplots()
         h, w = self.raster.shape[:2]
@@ -437,18 +474,19 @@ class ExperimentLatticeRun:
             ax.imshow(central_raster, origin="lower", cmap="gray_r")
             if aim_area:
                 for traj in self.trajectories:
-                    traj_aim_df = traj.data[traj.data["Aim"] == 1]
-                    traj_no_aim_df = traj.data[traj.data["Aim"] == 0]
+                    data = traj.data.iloc[:steps]
+                    traj_aim_df = data[data["Aim"] == 1]
+                    traj_no_aim_df = data[data["Aim"] == 0]
                     ax.scatter(
-                        traj_aim_df["X"][slice(steps)] - cw,
-                        traj_aim_df["Y"][slice(steps)] - ch,
+                        traj_aim_df["X"] - cw,
+                        traj_aim_df["Y"] - ch,
                         s=0.001,
                         marker=".",
                         c="lightblue",
                     )
                     ax.scatter(
-                        traj_no_aim_df["X"][slice(steps)] - cw,
-                        traj_no_aim_df["Y"][slice(steps)] - ch,
+                        traj_no_aim_df["X"] - cw,
+                        traj_no_aim_df["Y"] - ch,
                         s=0.001,
                         marker=".",
                         c="green",
@@ -470,18 +508,19 @@ class ExperimentLatticeRun:
                         )
         elif aim_area:
             for traj in self.trajectories:
-                traj_aim_df = traj.data[traj.data["Aim"] == 1]
-                traj_no_aim_df = traj.data[traj.data["Aim"] == 0]
+                data = traj.data.iloc[:steps]
+                traj_aim_df = data[data["Aim"] == 1]
+                traj_no_aim_df = data[data["Aim"] == 0]
                 ax.scatter(
-                    traj_aim_df["X"][slice(steps)],
-                    traj_aim_df["Y"][slice(steps)],
+                    traj_aim_df["X"],
+                    traj_aim_df["Y"],
                     marker=".",
                     s=0.1,
                     c="lightblue",
                 )
                 ax.scatter(
-                    traj_no_aim_df["X"][slice(steps)],
-                    traj_no_aim_df["Y"][slice(steps)],
+                    traj_no_aim_df["X"],
+                    traj_no_aim_df["Y"],
                     marker=".",
                     s=0.1,
                     c="green",
@@ -615,8 +654,9 @@ class EnsembleExperimentLatticeRun:
             and the scaling exponent (slope).
         """
         mean_traj_df = self.mean_over_runs()
-        x_var = np.log(mean_traj_df["Time"].to_numpy().reshape(-1, 1)[1:])
-        y_var = np.log(mean_traj_df["MSD"].to_numpy()[1:])
+        x_var, y_var = _power_law_inputs(
+            mean_traj_df["Time"].to_numpy(), mean_traj_df["MSD"].to_numpy()
+        )
         pw = LinearRegression(fit_intercept=intercept)
         pw.fit(x_var, y_var)
         return pw, math.exp(pw.intercept_), pw.coef_[0]
@@ -941,7 +981,9 @@ def random_walk_2d_lattice(
         - 'fpt': DataFrame with columns ['Replicate', 'FirstInactiveTime'].
         - 'hits': DataFrame or None with hit counts per save interval and a
           'Time' column (present when `steady_state_chosen_obstacle` is True).
-        - 'waiting_times': ndarray or None of recorded waiting times for hits.
+        - 'waiting_times': ndarray or None of recorded waiting times for hits
+          (present when `steady_state_chosen_obstacle` is True and chosen
+          obstacles exist).
     """
     h, w = raster.shape
     if start is None:
@@ -1151,8 +1193,9 @@ def random_walk_2d_lattice(
         {"Replicate": np.arange(nreps), "FirstInactiveTime": inactive_time}
     )
 
+    steady = steady_state_chosen_obstacle and use_chosen
     df_hits = None
-    if steady_state_chosen_obstacle and use_chosen:
+    if steady:
         df_hits = pd.DataFrame(hits)
         df_hits["Time"] = time_vec
 
@@ -1160,9 +1203,7 @@ def random_walk_2d_lattice(
         "traj": df_traj,
         "fpt": df_ftp,
         "hits": df_hits,
-        "waiting_times": (
-            np.asarray(waiting_time_all) if steady_state_chosen_obstacle else None
-        ),
+        "waiting_times": np.asarray(waiting_time_all) if steady else None,
     }
 
 
@@ -1255,8 +1296,18 @@ class ExperimentLattice:
         if self.config.dimensions[0] != 0 or self.config.dimensions[1] <= 0:
             msg = "config.dimensions must be (0, N) with N > 0"
             raise ValueError(msg)
+        if self.config.dimensions[1] % self.config.lattice_resolution != 0:
+            msg = "config.dimensions[1] must be a multiple of config.lattice_resolution"
+            raise ValueError(msg)
         if self.config.particle_radius is not None and self.config.particle_radius < 0:
             msg = "config.particle_radius must be None or non-negative"
+            raise ValueError(msg)
+        if (
+            self.config.particle_radius is not None
+            and 2 * self.config.particle_radius + 1
+            > self.config.dimensions[1] / self.config.lattice_resolution
+        ):
+            msg = "config.particle_radius: particle is bigger than simulation domain"
             raise ValueError(msg)
 
         self._config = deepcopy(self.config)
@@ -1346,7 +1397,7 @@ class ExperimentLattice:
             min_dim_cov, max_dim_cov = self._config.coverage_dimension
             workspace = box(min_dim_cov, min_dim_cov, max_dim_cov, max_dim_cov)
         self.coverage = workspace.intersection(union_shapes).area / (
-            max_dim_cov * max_dim_cov
+            (max_dim_cov - min_dim_cov) * (max_dim_cov - min_dim_cov)
         )
 
         chosen_particles_by_area: list[BaseGeometry] = []
@@ -1525,7 +1576,7 @@ class ExperimentLattice:
 
         start = spawn(
             self.raster,
-            self._config.replicates,
+            nreps,
             self._config.dimensions,
             self._config.particle_radius,
             (self._config.start[1], self._config.start[0]),

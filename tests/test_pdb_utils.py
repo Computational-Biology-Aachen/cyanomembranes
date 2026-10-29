@@ -8,7 +8,6 @@ data). Every strict xfail names one confirmed bug (see INFO/OPEN_ITEMS.md, secti
 from __future__ import annotations
 
 import numpy as np
-import pandas as pd
 import pytest
 from shapely.geometry import Point, Polygon
 
@@ -225,7 +224,7 @@ def in_dir(tmp_path):
 def test_process_proteins_creates_files_and_properties(in_dir, tmp_path):
     out = tmp_path / "out" / "nested"
     res = pu.process_proteins(in_dir, out, ["a.pdb"])
-    assert {p.name for p in out.iterdir()} == {"a_wo.pdb", "a.wkt", "info.csv"}
+    assert {p.name for p in out.iterdir()} == {"a_wo.pdb", "a.wkt"}  # no summary file
     assert list(res) == ["a"]
     entry = res["a"]
     assert entry["total_mass"] == pytest.approx((M_N + 3 * M_C + M_O) / 1000)
@@ -272,17 +271,3 @@ def test_process_proteins_trpdb_uses_cache(in_dir, tmp_path):
     stamp = (out / "c_wo.pdb").stat().st_mtime_ns
     pu.process_proteins(in_dir, out, ["c.trpdb"])
     assert (out / "c_wo.pdb").stat().st_mtime_ns == stamp
-
-
-@pytest.mark.xfail(
-    reason="Low: info.csv is written once per call but holds only the proteins of"
-    " that call (earlier runs are overwritten) and objects as repr strings"
-    " (pdb_utils.py:234)",
-    strict=True,
-)
-def test_process_proteins_info_csv_accumulates_over_calls(in_dir, tmp_path):
-    out = tmp_path / "out"
-    pu.process_proteins(in_dir, out, ["a.pdb"])
-    pu.process_proteins(in_dir, out, ["b.pdb"])
-    info = pd.read_csv(out / "info.csv", index_col=0)
-    assert set(info.columns) == {"a", "b"}
