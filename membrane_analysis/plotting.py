@@ -1,4 +1,5 @@
 import itertools
+import warnings
 
 import matplotlib as mlp
 import matplotlib.pyplot as plt
@@ -364,6 +365,13 @@ def _plot_fpt_no_crystals(scenario, scalars, new_out, pic_out):
             {key: df.set_index("Time")["Active"] for key, df in Active_dict.items()}
         )
         Active_df = Active_df.reset_index()
+        if len(Active_dict) < 2:
+            warnings.warn(
+                f"3d fpt plot of {pkey} skipped: it needs at least two coverages",
+                UserWarning,
+                stacklevel=2,
+            )
+            continue
         fig2, _ax2 = plot_3d_fpt(Active_df, scenario)
         _save_figure(fig2, pic_out / f"3d_membrane_fpt_{pkey}", scenario)
         plt.close(fig2)

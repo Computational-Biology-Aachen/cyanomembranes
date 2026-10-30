@@ -826,7 +826,7 @@ def test_coarse_exp_config_is_accepted_by_the_experiment():
 
 
 # --------------------------------------------------------------------------
-# rdf, nndf (known point sets), min_neigbor_distance
+# rdf, nndf (known point sets), min_neighbor_distance
 # --------------------------------------------------------------------------
 
 
@@ -874,7 +874,7 @@ def test_ghost_arrays_must_hold_nine_copies(function):
 def test_min_neighbour_distance_start_indices_must_hold_nine_copies():
     points = _ideal_gas_with_ghosts(50, 0)
     with pytest.raises(ValueError, match="multiple of 9, got 17"):
-        mu.min_neigbor_distance(points, np.arange(17), np.arange(450), BOX, r_max=100)
+        mu.min_neighbor_distance(points, np.arange(17), np.arange(450), BOX, r_max=100)
 
 
 @pytest.mark.parametrize("function", [mu.rdf, mu.nndf])
@@ -885,7 +885,7 @@ def test_without_ghosts_any_length_is_accepted(function):
 
 def test_min_neighbour_distance_uses_the_first_ninth_of_the_start_indices():
     points = _ideal_gas_with_ghosts(50, 0)
-    distance = mu.min_neigbor_distance(
+    distance = mu.min_neighbor_distance(
         points, np.arange(450), np.arange(450), BOX, r_max=100
     )
     assert distance.shape == (50,)
@@ -905,7 +905,7 @@ def test_nndf_of_a_square_lattice_jumps_at_the_spacing():
 def test_min_neighbour_distance_between_two_species():
     # species A: indices 0-1, species B: indices 2-3
     points = np.array([[0.0, 0.0], [100.0, 0.0], [3.0, 4.0], [100.0, 12.0]])
-    distance = mu.min_neigbor_distance(
+    distance = mu.min_neighbor_distance(
         points, np.array([0, 1]), [2, 3], BOX, r_max=50, ghosts=False
     )
     assert distance == pytest.approx([5.0, 12.0])
@@ -913,7 +913,7 @@ def test_min_neighbour_distance_between_two_species():
 
 def test_min_neighbour_distance_is_nan_without_a_neighbour_in_range():
     points = np.array([[0.0, 0.0], [400.0, 0.0]])
-    distance = mu.min_neigbor_distance(
+    distance = mu.min_neighbor_distance(
         points, np.array([0]), [1], BOX, r_max=100, ghosts=False
     )
     assert np.isnan(distance).all()
@@ -921,7 +921,7 @@ def test_min_neighbour_distance_is_nan_without_a_neighbour_in_range():
 
 def test_min_neighbour_distance_ignores_the_point_itself():
     points = np.array([[0.0, 0.0], [30.0, 0.0]])
-    distance = mu.min_neigbor_distance(
+    distance = mu.min_neighbor_distance(
         points, np.array([0, 1]), [0, 1], BOX, r_max=100, ghosts=False
     )
     assert distance == pytest.approx([30.0, 30.0])  # not 0
@@ -930,7 +930,7 @@ def test_min_neighbour_distance_ignores_the_point_itself():
 def test_min_neighbour_distance_uses_only_the_original_cell_with_ghosts():
     ghosts = _ideal_gas_with_ghosts(40, 5)
     indices = np.arange(len(ghosts))
-    distance = mu.min_neigbor_distance(ghosts, indices, indices, BOX, ghosts=True)
+    distance = mu.min_neighbor_distance(ghosts, indices, indices, BOX, ghosts=True)
     assert len(distance) == 40
     assert not np.isnan(distance).any()  # periodic copies supply the neighbours
 
@@ -1551,3 +1551,46 @@ def test_start_area_stays_in_the_original_tile_with_a_tile_sized_box():
 def test_start_area_reaches_the_copies_with_an_oversized_box():
     _, _, max_x, _ = _start_area_bounds(box(0, 0, 5000, 5000))
     assert max_x > TILE
+
+
+def test_min_neighbor_distance_matches_a_brute_force_search():
+    rng = np.random.default_rng(1)
+    points = rng.uniform(0, BOX, size=(200, 2))
+    starts, targets = np.arange(100), np.arange(100, 200)
+    expected = []
+    for i in starts:
+        d = np.linalg.norm(points[targets] - points[i], axis=1)
+        d = d[d <= BOX / 2]
+        expected.append(d.min() if d.size else np.nan)
+    for target_idx in (targets, targets.tolist()):
+        distance = mu.min_neighbor_distance(
+            points, starts, target_idx, BOX, ghosts=False
+        )
+        assert distance == pytest.approx(expected, nan_ok=True)
+
+
+def test_3d_fpt_is_skipped_with_one_coverage_and_the_other_figures_stay(tmp_path):
+    scenario = ScenarioConfig(
+        name="fpt",
+        analysis_type=AnalysisType.FPT,
+        description=None,
+        random_start_over_whole_membrane=True,
+        number_of_proteins={"P": [10]},
+    )
+    out = tmp_path / "fpt"
+    (out / "timeseries").mkdir(parents=True)
+    pd.DataFrame(
+        [{"pkey": "P", "nprot": 10, "mean_coverage": 0.1}]
+    ).to_csv(out / "scalars.csv", index=False)
+    pd.DataFrame(
+        {
+            "Time": [0.0, 1.0, 2.0],
+            "Active": [1.0, 0.6, 0.3],
+            "Active_ci_low": [1.0, 0.55, 0.25],
+            "Active_ci_high": [1.0, 0.65, 0.35],
+        }
+    ).to_csv(out / "timeseries" / "P_10.csv", index=False)
+    with pytest.warns(UserWarning, match="needs at least two coverages"):
+        plot_fpt(scenario, tmp_path)
+    pictures = {p.name for p in (out / "picture").iterdir()}
+    assert pictures == {"membrane_fpt_P.png"}

@@ -877,9 +877,10 @@ def test_placement_routine_positions_include_start_world():
 
 
 @pytest.mark.parametrize("lattice", ["square", "triangular", "hexagonal"])
-def test_crystal_has_n_polygons_without_overlap(py_random, lattice):
-    py_random.seed(1)
-    crystal = gu.make_random_crystal_2d(_star(30, seed=1), 10, lattice_type=lattice)
+def test_crystal_has_n_polygons_without_overlap(lattice):
+    crystal = gu.make_random_crystal_2d(
+        _star(30, seed=1), 10, lattice_type=lattice, rng=np.random.default_rng(1)
+    )
     assert len(crystal) == 10
     assert _overlaps(crystal) == []
     assert all(
@@ -889,10 +890,9 @@ def test_crystal_has_n_polygons_without_overlap(py_random, lattice):
     )
 
 
-def test_crystal_seed_is_first_and_centred_at_origin(py_random):
-    py_random.seed(1)
+def test_crystal_seed_is_first_and_centred_at_origin():
     seed = _star(30, seed=1, center=(400, 500))
-    crystal = gu.make_random_crystal_2d(seed, 4)
+    crystal = gu.make_random_crystal_2d(seed, 4, rng=np.random.default_rng(1))
     assert (crystal[0].centroid.x, crystal[0].centroid.y) == pytest.approx(
         (0, 0), abs=1e-9
     )
@@ -900,33 +900,52 @@ def test_crystal_seed_is_first_and_centred_at_origin(py_random):
     assert len(gu.make_random_crystal_2d(seed, 4, exclude_first=True)) == 3
 
 
-def test_crystal_reproducible_with_python_random_seed(py_random):
-    py_random.seed(7)
-    a = gu.make_random_crystal_2d(_star(30, seed=1), 8, chaos=[0.9, 1.1])
-    py_random.seed(7)
-    b = gu.make_random_crystal_2d(_star(30, seed=1), 8, chaos=[0.9, 1.1])
+def _crystal(seed):
+    return gu.make_random_crystal_2d(
+        _star(30, seed=1), 8, chaos=[0.9, 1.1], rng=np.random.default_rng(seed)
+    )
+
+
+def test_crystal_reproducible_with_the_rng_seed():
+    a, b = _crystal(7), _crystal(7)
     assert all(p.equals(q) for p, q in zip(a, b, strict=True))
 
 
-def test_crystal_regular_squares_sit_on_a_lattice(py_random):
+def test_crystal_differs_with_another_rng_seed():
+    a, b = _crystal(7), _crystal(8)
+    assert not all(p.equals(q) for p, q in zip(a, b, strict=True))
+
+
+def test_crystal_ignores_the_global_random_module(py_random):
+    py_random.seed(1)
+    a = _crystal(7)
     py_random.seed(2)
-    crystal = gu.make_random_crystal_2d(box(-5, -5, 5, 5), 8, regular=True)
+    b = _crystal(7)
+    assert all(p.equals(q) for p, q in zip(a, b, strict=True))
+
+
+def test_crystal_regular_squares_sit_on_a_lattice():
+    crystal = gu.make_random_crystal_2d(
+        box(-5, -5, 5, 5), 8, regular=True, rng=np.random.default_rng(2)
+    )
     centroids = np.array([[p.centroid.x, p.centroid.y] for p in crystal])
     spacing = np.abs(centroids[np.abs(centroids) > 1e-9]).min()
     assert spacing > 10  # squares of side 10 never touch
     assert np.allclose(centroids / spacing, np.round(centroids / spacing), atol=1e-6)
 
 
-def test_crystal_chaos_keeps_polygons_apart(py_random):
-    py_random.seed(3)
-    crystal = gu.make_random_crystal_2d(_star(20, seed=1), 8, chaos=[0.95, 1.2, 20])
+def test_crystal_chaos_keeps_polygons_apart():
+    crystal = gu.make_random_crystal_2d(
+        _star(20, seed=1), 8, chaos=[0.95, 1.2, 20], rng=np.random.default_rng(3)
+    )
     assert len(crystal) == 8 and _overlaps(crystal) == []
 
 
-def test_crystal_constraint_is_respected(py_random):
-    py_random.seed(4)
+def test_crystal_constraint_is_respected():
     constraint = box(-150, -150, 150, 150)
-    crystal = gu.make_random_crystal_2d(_star(15, seed=1), 6, constraint=constraint)
+    crystal = gu.make_random_crystal_2d(
+        _star(15, seed=1), 6, constraint=constraint, rng=np.random.default_rng(4)
+    )
     assert all(constraint.intersects(p) for p in crystal[1:])
 
 
@@ -935,12 +954,12 @@ def test_crystal_large_seed():
 
 
 _HANG = """
-import random
+import numpy as np
 from shapely.geometry import box
 import cyanomembranes.geo_utils as g
-random.seed(0)
 g.make_random_crystal_2d(
-    box(-5, -5, 5, 5), 50, constraint=box(-40, -40, 40, 40), max_attempts=200
+    box(-5, -5, 5, 5), 50, constraint=box(-40, -40, 40, 40), max_attempts=200,
+    rng=np.random.default_rng(0),
 )
 """
 
@@ -961,6 +980,7 @@ def test_crystal_full_constraint_raises_instead_of_hanging():
 
 
 def test_crystal_max_attempts_does_not_limit_feasible_crystals():
-    random.seed(0)
-    placed = gu.make_random_crystal_2d(box(-5, -5, 5, 5), 12, max_attempts=50)
+    placed = gu.make_random_crystal_2d(
+        box(-5, -5, 5, 5), 12, max_attempts=50, rng=np.random.default_rng(0)
+    )
     assert len(placed) == 12

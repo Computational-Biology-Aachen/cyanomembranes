@@ -2277,6 +2277,47 @@ def test_start_inside_obstacle_is_accepted_with_random_start():
     assert len(bl.ExperimentLattice(cfg).run().trajectories) == 10
 
 
+@pytest.mark.parametrize("has_ghost", [False, True])
+def test_start_within_the_particle_radius_of_an_obstacle_is_rejected(has_ghost):
+    cfg = _config(
+        shapes=[box(8, 8, 14, 14)],
+        start=(7, 10),
+        particle_radius=2,
+        has_ghost=has_ghost,
+        nsteps=2,
+    )
+    with pytest.raises(ValueError, match="not a free centre"):
+        bl.ExperimentLattice(cfg)
+
+
+@pytest.mark.parametrize("has_ghost", [False, True])
+def test_start_beyond_the_particle_radius_of_an_obstacle_is_accepted(has_ghost):
+    cfg = _config(
+        shapes=[box(8, 8, 14, 14)],
+        start=(4, 10),
+        particle_radius=2,
+        has_ghost=has_ghost,
+        nsteps=2,
+    )
+    assert len(bl.ExperimentLattice(cfg).run().trajectories) == 10
+
+
+def test_start_next_to_an_obstacle_is_accepted_without_a_particle_radius():
+    cfg = _config(shapes=[box(8, 8, 14, 14)], start=(7, 10), nsteps=2)
+    assert len(bl.ExperimentLattice(cfg).run().trajectories) == 10
+
+
+def test_random_start_ignores_the_free_centre_check_of_the_fixed_start():
+    cfg = _config(
+        shapes=[box(8, 8, 14, 14)],
+        start=(7, 10),
+        particle_radius=2,
+        random_start=True,
+        nsteps=2,
+    )
+    assert len(bl.ExperimentLattice(cfg).run().trajectories) == 10
+
+
 def test_start_in_padding_region_is_accepted():
     cfg = _config(start=(-5, -5), nsteps=2)
     assert len(bl.ExperimentLattice(cfg).run().trajectories) == 10

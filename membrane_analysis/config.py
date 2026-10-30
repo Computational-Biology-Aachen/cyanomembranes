@@ -5,7 +5,8 @@ from enum import Enum, auto
 from pathlib import Path
 
 import numpy as np
-from shapely.geometry import box
+from shapely.geometry import Polygon, box
+from shapely.geometry.base import BaseGeometry
 
 import cyanomembranes as cm
 
@@ -111,8 +112,8 @@ class ScenarioConfig:
     steady_state_window: int = 20
 
     # --- Start and Aim areas ---
-    start_area: object | None = None
-    aim_area: object | None = None
+    start_area: BaseGeometry | None = None
+    aim_area: Polygon | None = None
 
     # --- Lattice resolution ---
     lattice_resolution: int | None = None

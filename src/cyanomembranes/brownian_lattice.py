@@ -1216,8 +1216,6 @@ class ExperimentLatticeConfig:
     ----------
     nsteps : int
         Number of steps per trajectory.
-    dt : float
-        Time step size.
     shapes : list[Polygon] | World | None
         Obstacles or geometry for the simulation.
     replicates : int
@@ -1235,7 +1233,6 @@ class ExperimentLatticeConfig:
 
     nsteps: int = 1000
     shapes: Sequence[BaseGeometry] | None = None
-    lattice_type: str = "square"
     lattice_resolution: int = 1
     replicates: int = 100
     diff_coefficient: float = 1.0
@@ -1553,6 +1550,19 @@ class ExperimentLattice:
                 )
         else:
             self.free_centers = None
+
+        if (
+            self._config.particle_radius
+            and not self._config.random_start
+            and self.free_centers is not None
+        ):
+            row, col = int(self._config.start[1]), int(self._config.start[0])
+            if not self.free_centers[row, col]:
+                msg = (
+                    "config.start is not a free centre for "
+                    f"particle_radius={self._config.particle_radius}"
+                )
+                raise ValueError(msg)
 
     def worker(self, nreps: int) -> tuple:
         """Run a single experiment batch and return its results.

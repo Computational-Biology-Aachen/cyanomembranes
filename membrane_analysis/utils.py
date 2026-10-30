@@ -39,6 +39,7 @@ def _cg_str(cg) -> str:
 
 def _timeseries_filename(condition: Condition, with_mv: bool = False) -> str:
     if condition.cg is not None:
+        assert condition.crystal_prot is not None
         parts = [
             condition.pkey,
             str(condition.nprot),
@@ -168,7 +169,7 @@ def nndf(polygons, n_bins, box_size, r_max=None, ghosts=True):
     return G_empirical, G_std, g_nn_empirical, g_nn_std, bin_centers
 
 
-def min_neigbor_distance(
+def min_neighbor_distance(
     polygons, start_idx, target_idx, box_size, r_max=None, ghosts=True
 ):
     """Distance from each start point to its nearest target point.
@@ -186,10 +187,12 @@ def min_neigbor_distance(
     if r_max is None:
         r_max = box_size / 2
 
+    targets = set(np.asarray(target_idx).tolist())
+
     min_distance = []
     for i in start_idx:
         neighbors = tree.query_ball_point(polygons[i], r_max)
-        neighbors = [j for j in neighbors if j != i and j in target_idx]
+        neighbors = [j for j in neighbors if j != i and j in targets]
 
         if len(neighbors) == 0:
             min_distance.append(np.nan)

@@ -15,7 +15,6 @@ from __future__ import annotations
 
 import logging
 import math
-import random
 import warnings
 from copy import deepcopy
 from pathlib import Path
@@ -988,7 +987,9 @@ def make_random_crystal_2d(
     exclude_first: bool = False,
     chaos: list[float] | None = None,
     max_attempts: int = 10_000,
+    rng: np.random.Generator | None = None,
 ) -> list[Polygon]:
+    rng = np.random.default_rng() if rng is None else rng
     seed = _translate_polygon(seed, 0, 0)
     seed_dop = get_dop(seed, k=16)
     seed_dop_reverse = point_reflect(seed_dop)  # type: ignore
@@ -1014,27 +1015,27 @@ def make_random_crystal_2d(
             if failed_attempts > max_attempts:
                 msg = "Could not place anymore polygons"
                 raise RuntimeError(msg)
-            frontier_idx = random.choice(range(len(placed)))
+            frontier_idx = int(rng.integers(len(placed)))
             fpoly = placed[frontier_idx]
 
             if regular is True:
                 dist = max_dist
-                direction, _ = random.choice(dir_dist)
+                direction, _ = dir_dist[int(rng.integers(len(dir_dist)))]
             else:
-                direction, dist = random.choice(dir_dist)
+                direction, dist = dir_dist[int(rng.integers(len(dir_dist)))]
 
             if chaos:
-                dist_jitter = random.uniform(chaos[0], chaos[1])
+                dist_jitter = rng.uniform(chaos[0], chaos[1])
                 max_angle_jitter = chaos[2] if len(chaos) > 2 else 30
                 theta = math.radians(
-                    random.uniform(-max_angle_jitter, max_angle_jitter)
+                    rng.uniform(-max_angle_jitter, max_angle_jitter)
                 )
                 cos_t, sin_t = math.cos(theta), math.sin(theta)
                 rot = np.array([[cos_t, -sin_t], [sin_t, cos_t]])
                 jittered_dir = rot @ direction
                 dx, dy = jittered_dir * dist * max_variation * dist_jitter
                 new_polygon = translate(fpoly, dx, dy)
-                new_polygon = rotate(new_polygon, random.uniform(0.0, 360.0))
+                new_polygon = rotate(new_polygon, rng.uniform(0.0, 360.0))
             else:
                 dx, dy = direction * dist * max_variation
                 new_polygon = translate(fpoly, dx, dy)
