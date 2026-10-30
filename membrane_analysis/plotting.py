@@ -1,3 +1,5 @@
+import itertools
+
 import matplotlib as mlp
 import matplotlib.pyplot as plt
 import numpy as np
@@ -16,6 +18,15 @@ from membrane_analysis.config import (
 from .utils import _cg_str, _mv_str, _timeseries_filename
 
 
+def _save_figure(fig, path, scenario, dpi=300):
+    """Save `fig` as `path` + the suffix of `scenario.figure_format`.
+
+    The suffix is appended instead of replaced, because the names contain dots
+    (`mv1.2`, `.csv_run0`). `dpi` only matters for png (and eps images).
+    """
+    fig.savefig(path.parent / f"{path.name}.{scenario.figure_format}", dpi=dpi)
+
+
 def plot_individual_runs(run, condition, scenario, new_out, aim=False):
     runs_dir = new_out / "individual_runs"
     runs_dir.mkdir(exist_ok=True)
@@ -30,12 +41,11 @@ def plot_individual_runs(run, condition, scenario, new_out, aim=False):
         ax.set_xlabel(r"$\mathrm{\AA}$")
         ax.set_ylabel(r"$\mathrm{\AA}$")
         fig.tight_layout()
-        if scenario.fully_crystal:
-            with_mv = True
-        else:
-            with_mv = False
-        fig.savefig(
-            runs_dir / f"{_timeseries_filename(condition, with_mv)}_run{i}.png", dpi=300
+        with_mv = scenario.fully_crystal
+        _save_figure(
+            fig,
+            runs_dir / f"{_timeseries_filename(condition, with_mv)}_run{i}",
+            scenario,
         )
         plt.close(fig)
 
@@ -55,8 +65,8 @@ def plot_diffusion(scenario, out_root):
 
     scalars = pd.read_csv(new_out / "scalars.csv")
 
-    colors_palette = iter(COLORBLIND_PALETTE)
-    markers = iter(MARKER_LST)
+    colors_palette = itertools.cycle(COLORBLIND_PALETTE)
+    markers = itertools.cycle(MARKER_LST)
     fig1, axes1 = plt.subplots(1, 2, figsize=(7, 3))
     parameter_rows = []
     for pkey, nprot in scenario.number_of_proteins.items():
@@ -101,80 +111,76 @@ def plot_diffusion(scenario, out_root):
             }
         )
 
-        try:
+        current_color = next(colors_palette)
+        current_marker = next(markers)
+        axes1[1].scatter(
+            x,
+            y,
+            s=25,
+            edgecolors=current_color,
+            facecolor="white",
+            marker=current_marker,
+            linewidth=0.6,
+            zorder=3,
+            label=f"{LABEL_DICT.get(pkey, pkey)}",
+        )
+        axes1[1].errorbar(
+            x,
+            y,
+            yerr=yerr,
+            fmt="none",
+            ecolor=current_color,
+            capsize=5,
+            elinewidth=0.5,
+            capthick=0.5,
+        )
 
-            current_color = next(colors_palette)
-            current_marker = next(markers)
-            axes1[1].scatter(
-                x,
-                y,
-                s=25,
-                edgecolors=current_color,
-                facecolor="white",
-                marker=current_marker,
-                linewidth=0.6,
-                zorder=3,
-                label=f"{LABEL_DICT[pkey]}",
-            )
-            axes1[1].errorbar(
-                x,
-                y,
-                yerr=yerr,
-                fmt="none",
-                ecolor=current_color,
-                capsize=5,
-                elinewidth=0.5,
-                capthick=0.5,
-            )
+        axes1[1].plot(
+            x_fit,
+            y_fit_curve,
+            linestyle="--",
+            linewidth=1,
+            color=current_color,
+            zorder=2,
+        )
 
-            axes1[1].plot(
-                x_fit,
-                y_fit_curve,
-                linestyle="--",
-                linewidth=1,
-                color=current_color,
-                zorder=2,
-            )
+        axes1[0].scatter(
+            x2,
+            y,
+            s=25,
+            edgecolors=current_color,
+            facecolor="white",
+            marker=current_marker,
+            linewidth=0.6,
+            zorder=3,
+            label=f"{LABEL_DICT.get(pkey, pkey)}",
+        )
+        axes1[0].errorbar(
+            x2,
+            y,
+            yerr=yerr,
+            fmt="none",
+            ecolor=current_color,
+            capsize=5,
+            elinewidth=0.5,
+            capthick=0.5,
+        )
 
-            axes1[0].scatter(
-                x2,
-                y,
-                s=25,
-                edgecolors=current_color,
-                facecolor="white",
-                marker=current_marker,
-                linewidth=0.6,
-                zorder=3,
-                label=f"{LABEL_DICT[pkey]}",
-            )
-            axes1[0].errorbar(
-                x2,
-                y,
-                yerr=yerr,
-                fmt="none",
-                ecolor=current_color,
-                capsize=5,
-                elinewidth=0.5,
-                capthick=0.5,
-            )
-
-            axes1[0].plot(
-                x_fit2,
-                y_fit_curve2,
-                linestyle="--",
-                linewidth=1,
-                color=current_color,
-                zorder=2,
-            )
-        except:
-            pass
+        axes1[0].plot(
+            x_fit2,
+            y_fit_curve2,
+            linestyle="--",
+            linewidth=1,
+            color=current_color,
+            zorder=2,
+        )
 
         fig2, ax2 = plt.subplots(figsize=(6, 4))
         fig3, ax3 = plt.subplots(figsize=(6, 4))
         norm = colors.Normalize(vmin=min(nprot), vmax=max(nprot))
         cmap = mlp.colormaps["viridis"]
 
-        MAD_indicator = -1000
+        has_mad = False
 
         for _idx, row in current_prot.iterrows():
             n = row.nprot
@@ -211,7 +217,7 @@ def plot_diffusion(scenario, out_root):
                     color=current_color2,
                 )
 
-                MAD_indicator = 1293
+                has_mad = True
 
         ax2.set_xlabel(r"$\langle r \rangle$ (Å)", fontsize=12)
         ax2.set_ylabel(r"$D(r) / D_0$", fontsize=12)
@@ -222,10 +228,10 @@ def plot_diffusion(scenario, out_root):
         for spines in ax2.spines.values():
             spines.set_linewidth(0.5)
         fig2.tight_layout()
-        fig2.savefig(pic_out / f"membrane_diffusion_{pkey}.png", dpi=300)
+        _save_figure(fig2, pic_out / f"membrane_diffusion_{pkey}", scenario)
         plt.close(fig2)
 
-        if MAD_indicator == 1293:
+        if has_mad:
             ax3.set_ylabel(r"$\mathrm{MAD}/\sqrt{\mathrm{MSD}}$", fontsize=12)
             # ax3.set_xlabel(scenario.time_label, fontsize=12)
             ax3.set_xlabel(r"$\sqrt{\mathrm{MSD}} / \mathrm{\AA}$", fontsize=12)
@@ -235,7 +241,7 @@ def plot_diffusion(scenario, out_root):
             for spines in ax3.spines.values():
                 spines.set_linewidth(0.5)
             fig3.tight_layout()
-            fig3.savefig(pic_out / f"mad_sqrtmsd_ratio_{pkey}.png", dpi=300)
+            _save_figure(fig3, pic_out / f"mad_sqrtmsd_ratio_{pkey}", scenario)
         plt.close(fig3)
 
     fig1.tight_layout()
@@ -250,7 +256,7 @@ def plot_diffusion(scenario, out_root):
     axes1[0].legend(fontsize=7)
 
     fig1.tight_layout()
-    fig1.savefig(pic_out / "membrane_diffusion_last_D_dist.png", dpi=300)
+    _save_figure(fig1, pic_out / "membrane_diffusion_last_D_dist", scenario)
     plt.close(fig1)
 
     pd.DataFrame(parameter_rows).to_csv(pic_out / "reg_param_df.csv")
@@ -284,7 +290,7 @@ def plot_3d_fpt(Active_df, scenario):
         alpha=0.95,
     )
 
-    for cov, active in zip(coverages, Z_raw):
+    for cov, active in zip(coverages, Z_raw, strict=True):
         ax.plot(times, np.full_like(times, cov), active, color="grey", linewidth=2)
 
     ax.set_xlabel(scenario.time_label, size=12, labelpad=16)
@@ -313,7 +319,6 @@ def _finalise_fpt_ax(ax1, scenario):
 def _finalise_fpt_ax2(ax2, scenario):
     ax2.set_xlabel("% in array", fontsize=8)
     ax2.set_ylabel(f"Mean first encounter time / [{scenario.time_label}]", fontsize=8)
-    ax2.set_ylim(0.01, 0.025)
     ax2.tick_params(labelsize=7)
     ax2.grid(True, linestyle=":", linewidth=0.5, alpha=0.5)  # noqa: FBT003
     for spines in ax2.spines.values():
@@ -351,7 +356,7 @@ def _plot_fpt_no_crystals(scenario, scalars, new_out, pic_out):
 
         _finalise_fpt_ax(ax1, scenario)
         fig1.tight_layout()
-        fig1.savefig(pic_out / f"membrane_fpt_{pkey}.png", dpi=300)
+        _save_figure(fig1, pic_out / f"membrane_fpt_{pkey}", scenario)
         plt.close(fig1)
 
         Active_dict = dict(sorted(Active_dict.items()))
@@ -360,7 +365,7 @@ def _plot_fpt_no_crystals(scenario, scalars, new_out, pic_out):
         )
         Active_df = Active_df.reset_index()
         fig2, _ax2 = plot_3d_fpt(Active_df, scenario)
-        fig2.savefig(pic_out / f"3d_membrane_fpt_{pkey}.png", dpi=300)
+        _save_figure(fig2, pic_out / f"3d_membrane_fpt_{pkey}", scenario)
         plt.close(fig2)
 
 
@@ -402,13 +407,12 @@ def _plot_fpt_crystals(scenario, scalars, new_out, pic_out):
                     axes = [axes]
                     axes2 = [axes2]
 
-                for ax, ax2, nprot in zip(axes, axes2, nprot_lst):
+                for ax, ax2, nprot in zip(axes, axes2, nprot_lst, strict=True):
                     nprot_rows = subset[subset["nprot"] == nprot]
                     coverage = nprot_rows["mean_coverage"].round(3).unique()[0]
                     color_iter = iter(COLORBLIND_PALETTE)
 
                     for _, row in nprot_rows.sort_values("cg").iterrows():
-
                         color = next(color_iter)
 
                         low = row["first_inactive_time_ci_low"] * scenario.time_scale
@@ -435,7 +439,7 @@ def _plot_fpt_crystals(scenario, scalars, new_out, pic_out):
                         ax.plot(
                             ts_df["Time"] * scenario.time_scale,
                             ts_df["Active"],
-                            label=f"{round(row['cg']*100)}",
+                            label=f"{round(row['cg'] * 100)}",
                             linewidth=2,
                             alpha=0.7,
                             color=color,
@@ -450,13 +454,13 @@ def _plot_fpt_crystals(scenario, scalars, new_out, pic_out):
                         )
 
                     ax.set_title(
-                        f"nprot={int(nprot)} - coverage = {round(coverage*100)}%",
+                        f"nprot={int(nprot)} - coverage = {round(coverage * 100)}%",
                         fontsize=8,
                     )
                     _finalise_fpt_ax(ax, scenario)
 
                     ax2.set_title(
-                        f"nprot={int(nprot)} - coverage = {round(coverage*100)}%",
+                        f"nprot={int(nprot)} - coverage = {round(coverage * 100)}%",
                         fontsize=8,
                     )
                     _finalise_fpt_ax2(ax2, scenario)
@@ -468,9 +472,13 @@ def _plot_fpt_crystals(scenario, scalars, new_out, pic_out):
                     fontsize=9,
                 )
                 fig.tight_layout()
-                fig.savefig(
-                    pic_out / f"membrane_fpt_{pkey}_{crystal_prot}_mv{mv}.png", dpi=400
+                _save_figure(
+                    fig,
+                    pic_out / f"membrane_fpt_{pkey}_{crystal_prot}_mv{mv}",
+                    scenario,
+                    dpi=400,
                 )
+                plt.close(fig)
 
                 fig2.suptitle(
                     f"{LABEL_DICT.get(pkey, pkey)}-"
@@ -479,10 +487,13 @@ def _plot_fpt_crystals(scenario, scalars, new_out, pic_out):
                     fontsize=9,
                 )
                 fig2.tight_layout()
-                fig2.savefig(
-                    pic_out / f"membrane_fpt_scatter_{pkey}_{crystal_prot}_mv{mv}.png",
+                _save_figure(
+                    fig2,
+                    pic_out / f"membrane_fpt_scatter_{pkey}_{crystal_prot}_mv{mv}",
+                    scenario,
                     dpi=400,
                 )
+                plt.close(fig2)
 
 
 def plot_fpt(scenario, out_root):
@@ -505,7 +516,7 @@ def plot_fpt(scenario, out_root):
 
 def _finalise_rate_ax(ax1, scenario):
     ax1.set_xlabel(scenario.time_label, fontsize=8)
-    ax1.set_ylabel("Hits %", fontsize=8)
+    ax1.set_ylabel("Hits per save interval", fontsize=8)
     ax1.tick_params(labelsize=7)
     ax1.grid(True, linestyle=":", linewidth=0.5, alpha=0.5)  # noqa: FBT003
     ax1.legend(loc="upper left")
@@ -542,7 +553,7 @@ def _plot_rate_no_crystals(scenario, scalars, new_out, pic_out):
 
         _finalise_rate_ax(ax, scenario)
         fig.tight_layout()
-        fig.savefig(pic_out / f"membrane_rate_{pkey}.png", dpi=300)
+        _save_figure(fig, pic_out / f"membrane_rate_{pkey}", scenario)
         plt.close(fig)
 
 
@@ -569,7 +580,7 @@ def _plot_rate_crystals(scenario, scalars, new_out, pic_out):
                 if n_panels == 1:
                     axes = [axes]
 
-                for ax, nprot in zip(axes, nprot_lst):
+                for ax, nprot in zip(axes, nprot_lst, strict=True):
                     nprot_rows = subset[subset["nprot"] == nprot]
                     coverage = nprot_rows["mean_coverage"].round(3).unique()[0]
                     color_iter = iter(COLORBLIND_PALETTE)
@@ -609,7 +620,12 @@ def _plot_rate_crystals(scenario, scalars, new_out, pic_out):
                     fontsize=9,
                 )
                 fig.tight_layout()
-                fig.savefig(pic_out / f"membrane_rate_{pkey}_{crystal_prot}_mv{mv}.png")
+                _save_figure(
+                    fig,
+                    pic_out / f"membrane_rate_{pkey}_{crystal_prot}_mv{mv}",
+                    scenario,
+                )
+                plt.close(fig)
 
 
 def _plot_rate_constants(scenario, scalars, pic_out):
@@ -623,7 +639,7 @@ def _plot_rate_constants(scenario, scalars, pic_out):
         color = COLORBLIND_PALETTE[i % len(COLORBLIND_PALETTE)]
         if scenario.cdegree is not None:
             crystal_prot, cg = group_key
-            label = f"{LABEL_DICT.get(crystal_prot, crystal_prot)}, {round(cg*100)}"
+            label = f"{LABEL_DICT.get(crystal_prot, crystal_prot)}, {round(cg * 100)}"
         else:
             label = LABEL_DICT.get(group_key, group_key)
 
@@ -647,7 +663,7 @@ def _plot_rate_constants(scenario, scalars, pic_out):
     ax.legend(title="% in array", loc="upper left", fontsize=7)
     ax.tick_params(direction="in")
     fig.tight_layout()
-    fig.savefig(pic_out / "rate_constant.png", dpi=300)
+    _save_figure(fig, pic_out / "rate_constant", scenario)
     plt.close(fig)
 
 
@@ -669,3 +685,50 @@ def plot_rate(scenario, out_root):
     else:
         _plot_rate_crystals(scenario, scalars, new_out, pic_out)
         _plot_rate_constants(scenario, scalars, pic_out)
+
+
+def plot_aim(scenario, out_root):
+    new_out = out_root / scenario.name
+    pic_out = new_out / "picture"
+    pic_out.mkdir(parents=True, exist_ok=True)
+
+    if scenario.analysis_type != AnalysisType.AIM:
+        msg = "not correct plotting function for analysis type aim"
+        raise ValueError(msg)
+
+    for pkey, nprot_lst in scenario.number_of_proteins.items():
+        for nprot in nprot_lst:
+            fig, ax = plt.subplots()
+            for i, mv in enumerate(scenario.mv):
+                color = COLORBLIND_PALETTE[i % len(COLORBLIND_PALETTE)]
+                ts_df = pd.read_csv(
+                    new_out / "timeseries" / f"{pkey}_{nprot}_{_mv_str(mv)}.csv"
+                )
+
+                ax.plot(
+                    ts_df["Time"] * scenario.time_scale,
+                    ts_df["Aim"],
+                    label=f"mv={mv}",
+                    linewidth=2,
+                    alpha=0.7,
+                    color=color,
+                )
+
+                ax.fill_between(
+                    ts_df["Time"] * scenario.time_scale,
+                    ts_df["Aim_ci_low"],
+                    ts_df["Aim_ci_high"],
+                    alpha=0.3,
+                    color=color,
+                )
+
+            ax.set_xlabel(scenario.time_label, fontsize=8)
+            ax.set_ylabel("Aim fraction", fontsize=8)
+            ax.tick_params(labelsize=7)
+            ax.grid(True, linestyle=":", linewidth=0.5, alpha=0.5)  # noqa: FBT003
+            ax.legend(loc="upper left")
+            for spines in ax.spines.values():
+                spines.set_linewidth(0.5)
+
+            _save_figure(fig, pic_out / f"membrane_aim_{pkey}_{nprot}", scenario)
+            plt.close(fig)

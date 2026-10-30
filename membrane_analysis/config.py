@@ -4,12 +4,12 @@ from dataclasses import dataclass, field
 from enum import Enum, auto
 from pathlib import Path
 
+import numpy as np
 from shapely.geometry import box
 
 import cyanomembranes as cm
 
 # --- Analysis types ---
-
 
 class AnalysisType(Enum):
     FPT = auto()  # First-passage time: tracks Active % over time
@@ -32,6 +32,8 @@ COLORBLIND_PALETTE = [
     "#CC79A7",  # reddish purple
     "#999999",  # gray
 ]
+
+FIGURE_FORMATS = ("png", "pdf", "svg", "eps")
 
 # --- Protein label map ---
 LABEL_DICT = {
@@ -103,6 +105,7 @@ class ScenarioConfig:
     # --- Plot options ---
     time_scale: float = 1.0
     time_label: str = "Time (s)"
+    figure_format: str = "png"  # one of FIGURE_FORMATS (eps drops transparency)
 
     # --- Steady State ---
     steady_state_window: int = 20
@@ -127,12 +130,21 @@ class ScenarioConfig:
 
     plot_runs: PlotRunsConfig = field(default_factory=PlotRunsConfig)
 
+    def __post_init__(self) -> None:
+        if self.figure_format not in FIGURE_FORMATS:
+            msg = (
+                f"figure_format must be one of {FIGURE_FORMATS}, "
+                f"got {self.figure_format!r}"
+            )
+            raise ValueError(msg)
+
 
 def make_exp_config(
     scenario: ScenarioConfig,
     cytb6f_area: float,
     psii_area: float,
     n_processes: int,
+    seed: int | None = None,
 ) -> cm.brownian_lattice.ExperimentLatticeConfig:
     """Single source of truth for experiment configurations
 
@@ -154,6 +166,8 @@ def make_exp_config(
     cfg.has_ghost = True
     cfg.store_history = False
     cfg.workers = n_processes
+    if seed is not None:
+        cfg.rng = np.random.default_rng(seed)
     cfg.wrap = scenario.wrap
 
     # --- Analysis-type-specific parameters
@@ -180,7 +194,8 @@ def make_exp_config(
 
     # --- Spatial arrangement ---
     if not scenario.random_start_over_whole_membrane:
-        cfg.start_area_by_size = (psii_area, 50, box(0, 0, 5000, 5000))
+        size = cfg.dimensions[1]
+        cfg.start_area_by_size = (psii_area, 50, box(0, 0, size, size))
 
     if scenario.lattice_resolution:
         cfg.lattice_resolution = scenario.lattice_resolution

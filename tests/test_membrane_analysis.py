@@ -33,6 +33,7 @@ import cyanomembranes as cm  # noqa: E402
 import membrane_analysis.plotting as mplot  # noqa: E402
 from membrane_analysis import utils as mu  # noqa: E402
 from membrane_analysis.config import (  # noqa: E402
+    COLORBLIND_PALETTE,
     AnalysisType,
     Condition,
     PlotRunsConfig,
@@ -42,6 +43,7 @@ from membrane_analysis.config import (  # noqa: E402
 from membrane_analysis.pipeline import (  # noqa: E402
     ScalarMetrics,
     _iter_conditions,
+    _run_one_nprot,
     build_aim_metrics,
     build_diffusion_metrics,
     build_fpt_metrics,
@@ -51,6 +53,7 @@ from membrane_analysis.pipeline import (  # noqa: E402
 )
 from membrane_analysis.plotting import (  # noqa: E402
     _timeseries_filename_from_row,
+    plot_aim,
     plot_diffusion,
     plot_fpt,
     plot_rate,
@@ -552,7 +555,7 @@ def test_timeseries_name_survives_the_csv_round_trip(tmp_path, cg, mv):
 # --------------------------------------------------------------------------
 
 
-def test_fpt_crystal_plot_rounds_the_percentages(tmp_path):
+def test_fpt_crystal_plot_rounds_the_percentages(tmp_path, monkeypatch):
     pkey, crystal = "3WU2-PSII-ThermosynVul", "1JB0-PSI-syn-cocc"
     scenario = ScenarioConfig(
         name="fpt",
@@ -591,18 +594,20 @@ def test_fpt_crystal_plot_rounds_the_percentages(tmp_path):
             index=False,
         )
 
-    mplot.plt.close("all")
+    closed = []  # the plot closes its figures; keep them to look at
+    original_close = mplot.plt.close
+    monkeypatch.setattr(mplot.plt, "close", lambda fig=None: closed.append(fig))
     try:
         mplot._plot_fpt_crystals(
             scenario, pd.DataFrame(rows), tmp_path, tmp_path / "picture"
         )
-        fig = mplot.plt.figure(mplot.plt.get_fignums()[0])  # the Active-fraction plot
-        ax = fig.axes[0]
+        ax = closed[0].axes[0]  # the Active-fraction plot is closed first
         labels = [t.get_text() for t in ax.get_legend().get_texts()]
         assert labels == ["29", "57"]  # int(0.29 * 100) is 28, int(0.57 * 100) is 56
         assert ax.get_title() == "nprot=10 - coverage = 29%"
     finally:
-        mplot.plt.close("all")
+        for fig in closed:
+            original_close(fig)
 
 
 # --------------------------------------------------------------------------
@@ -857,6 +862,33 @@ def test_rdf_peaks_at_the_lattice_spacing():
 def test_r_max_above_half_the_box_is_rejected(function):
     with pytest.raises(ValueError, match="rmax"):
         function(_ideal_gas_with_ghosts(50, 0), 10, BOX, r_max=BOX / 2 + 1)
+
+
+@pytest.mark.parametrize("function", [mu.rdf, mu.nndf])
+def test_ghost_arrays_must_hold_nine_copies(function):
+    points = _ideal_gas_with_ghosts(50, 0)[:-1]  # 449 points
+    with pytest.raises(ValueError, match="multiple of 9, got 449"):
+        function(points, 10, BOX, r_max=100)
+
+
+def test_min_neighbour_distance_start_indices_must_hold_nine_copies():
+    points = _ideal_gas_with_ghosts(50, 0)
+    with pytest.raises(ValueError, match="multiple of 9, got 17"):
+        mu.min_neigbor_distance(points, np.arange(17), np.arange(450), BOX, r_max=100)
+
+
+@pytest.mark.parametrize("function", [mu.rdf, mu.nndf])
+def test_without_ghosts_any_length_is_accepted(function):
+    points = np.random.default_rng(0).uniform(0, BOX, size=(449, 2))
+    function(points, 10, BOX, r_max=100, ghosts=False)
+
+
+def test_min_neighbour_distance_uses_the_first_ninth_of_the_start_indices():
+    points = _ideal_gas_with_ghosts(50, 0)
+    distance = mu.min_neigbor_distance(
+        points, np.arange(450), np.arange(450), BOX, r_max=100
+    )
+    assert distance.shape == (50,)
 
 
 def test_nndf_of_a_square_lattice_jumps_at_the_spacing():
@@ -1156,8 +1188,366 @@ def test_plot_rate_writes_the_figures(rate_scenario):
     assert {"membrane_rate_P.png", "rate_constant.png"} <= pictures
 
 
-@pytest.mark.parametrize("function", [plot_fpt, plot_rate])
+@pytest.mark.parametrize("function", [plot_fpt, plot_rate, plot_aim])
 def test_plots_reject_the_wrong_analysis_type(function, tmp_path):
     scenario = _diffusion_scenario([10])
     with pytest.raises(ValueError, match="not correct plotting function"):
         function(scenario, tmp_path)
+
+
+def test_fully_crystal_scenario_keeps_one_timeseries_per_mv(tmp_path):
+    """Without `mv` in the name the files of different `mv` overwrite each other."""
+    scenario = ScenarioConfig(
+        name="crystal",
+        analysis_type=AnalysisType.FPT,
+        description=None,
+        random_start_over_whole_membrane=True,
+        number_of_proteins={"P": [1]},
+        mv=[1.2, 1.4],
+        fully_crystal=True,
+    )
+    (tmp_path / "P_crystal").mkdir()
+    for mv in scenario.mv:
+        for i in range(2):  # two members per condition
+            name = f"crystal_P_1_regularTrue_{str(mv).replace('.', '-')}_{i}.wkt"
+            _write_membrane(tmp_path / "P_crystal" / name, [CHOSEN])
+    cfg = _tiny_config(AnalysisType.FPT)
+    with _inline_ensemble():
+        scalars, _ = run_scenario(scenario, cfg, tmp_path)
+    series = sorted(p.name for p in (tmp_path / "crystal" / "timeseries").iterdir())
+    assert series == ["P_1_1.2.csv", "P_1_1.4.csv"]
+    assert sorted(scalars["mv"]) == [1.2, 1.4]
+
+
+def _aim_scenario(mv, number_of_proteins):
+    return ScenarioConfig(
+        name="aim",
+        analysis_type=AnalysisType.AIM,
+        description=None,
+        random_start_over_whole_membrane=True,
+        number_of_proteins=number_of_proteins,
+        mv=mv,
+        fully_crystal=True,
+    )
+
+
+def _write_aim_timeseries(root, number_of_proteins, mv):
+    directory = root / "aim" / "timeseries"
+    directory.mkdir(parents=True)
+    for pkey, nprots in number_of_proteins.items():
+        for nprot in nprots:
+            for value in mv:
+                pd.DataFrame(
+                    {
+                        "Time": [0.0, 1.0, 2.0],
+                        "Aim": [1.0, 0.6, 0.3],
+                        "Aim_ci_low": [1.0, 0.5, 0.2],
+                        "Aim_ci_high": [1.0, 0.7, 0.4],
+                    }
+                ).to_csv(
+                    directory / f"{pkey}_{nprot}_{mu._mv_str(value)}.csv", index=False
+                )
+
+
+def test_plot_aim_writes_one_figure_per_protein_and_nprot(tmp_path):
+    proteins = {"P": ["hexagonal", "square"], "Q": ["hexagonal"]}
+    mv = [1.2, 2]  # 2 is read as `2.0`
+    _write_aim_timeseries(tmp_path, proteins, mv)
+    plot_aim(_aim_scenario(mv, proteins), tmp_path)
+    pictures = {p.name for p in (tmp_path / "aim" / "picture").iterdir()}
+    assert pictures == {
+        "membrane_aim_P_hexagonal.png",
+        "membrane_aim_P_square.png",
+        "membrane_aim_Q_hexagonal.png",
+    }
+
+
+def test_plot_aim_closes_its_figures(tmp_path):
+    proteins = {"P": ["hexagonal", "square"]}
+    _write_aim_timeseries(tmp_path, proteins, [1.2])
+    mplot.plt.close("all")
+    plot_aim(_aim_scenario([1.2], proteins), tmp_path)
+    assert mplot.plt.get_fignums() == []
+
+
+def test_plot_aim_more_mv_than_colours(tmp_path):
+    proteins = {"P": ["hexagonal"]}
+    mv = [1.0 + 0.1 * i for i in range(len(COLORBLIND_PALETTE) + 2)]
+    _write_aim_timeseries(tmp_path, proteins, mv)
+    plot_aim(_aim_scenario(mv, proteins), tmp_path)
+    assert (tmp_path / "aim" / "picture" / "membrane_aim_P_hexagonal.png").exists()
+
+
+def test_figure_format_defaults_to_png(tmp_path):
+    proteins = {"P": ["hexagonal"]}
+    _write_aim_timeseries(tmp_path, proteins, [1.2])
+    plot_aim(_aim_scenario([1.2], proteins), tmp_path)
+    pictures = {p.name for p in (tmp_path / "aim" / "picture").iterdir()}
+    assert pictures == {"membrane_aim_P_hexagonal.png"}
+
+
+@pytest.mark.parametrize("figure_format", ["png", "pdf", "svg", "eps"])
+def test_plot_aim_writes_the_requested_figure_format(tmp_path, figure_format):
+    proteins = {"P": ["hexagonal"]}
+    _write_aim_timeseries(tmp_path, proteins, [1.2])
+    scenario = _aim_scenario([1.2], proteins)
+    scenario.figure_format = figure_format
+    plot_aim(scenario, tmp_path)
+    pictures = {p.name for p in (tmp_path / "aim" / "picture").iterdir()}
+    assert pictures == {f"membrane_aim_P_hexagonal.{figure_format}"}
+
+
+def test_figure_format_keeps_dots_in_the_file_name(tmp_path):
+    fig = mplot.plt.figure()
+    scenario = _aim_scenario([1.2], {"P": ["hexagonal"]})
+    scenario.figure_format = "svg"
+    mplot._save_figure(fig, tmp_path / "name_mv1.2", scenario)
+    mplot.plt.close(fig)
+    assert [p.name for p in tmp_path.iterdir()] == ["name_mv1.2.svg"]
+
+
+def test_unknown_figure_format_is_rejected():
+    with pytest.raises(ValueError, match="figure_format must be one of"):
+        ScenarioConfig(
+            name="s",
+            analysis_type=AnalysisType.AIM,
+            description=None,
+            random_start_over_whole_membrane=True,
+            number_of_proteins={"P": [1]},
+            figure_format="jpg",
+        )
+
+
+def _crystal_outputs(root, pkey, crystal):
+    """Scalars and time series for the crystal FPT and rate plots, one panel."""
+    (root / "timeseries").mkdir()
+    (root / "picture").mkdir()
+    rows = []
+    for cg in (0.29, 0.57):
+        row = {
+            "pkey": pkey,
+            "crystal_prot": crystal,
+            "mv": 1.2,
+            "nprot": 10,
+            "cg": cg,
+            "mean_coverage": 0.29,
+            "first_inactive_time": 0.015,
+            "first_inactive_time_ci_low": 0.014,
+            "first_inactive_time_ci_high": 0.016,
+        }
+        rows.append(row)
+        pd.DataFrame(
+            {
+                "Time": [0.0, 1.0, 2.0],
+                "Active": [1.0, 0.6, 0.3],
+                "Active_ci_low": [1.0, 0.55, 0.25],
+                "Active_ci_high": [1.0, 0.65, 0.35],
+                "Hits": [0.0, 2.0, 1.0],
+                "Hits_ci_low": [0.0, 1.5, 0.5],
+                "Hits_ci_high": [0.0, 2.5, 1.5],
+            }
+        ).to_csv(
+            root / "timeseries" / _timeseries_filename_from_row(pd.Series(row)),
+            index=False,
+        )
+    return pd.DataFrame(rows)
+
+
+@pytest.mark.parametrize("name", ["_plot_fpt_crystals", "_plot_rate_crystals"])
+def test_crystal_plots_leave_no_figure_open(tmp_path, name):
+    pkey, crystal = "3WU2-PSII-ThermosynVul", "1JB0-PSI-syn-cocc"
+    scenario = ScenarioConfig(
+        name="s",
+        analysis_type=AnalysisType.FPT,
+        description=None,
+        random_start_over_whole_membrane=True,
+        number_of_proteins={pkey: [10]},
+        cdegree={crystal: [0.29, 0.57]},
+        mv=[1.2],
+    )
+    scalars = _crystal_outputs(tmp_path, pkey, crystal)
+    mplot.plt.close("all")
+    getattr(mplot, name)(scenario, scalars, tmp_path, tmp_path / "picture")
+    assert len(list((tmp_path / "picture").iterdir())) > 0
+    assert mplot.plt.get_fignums() == []
+
+
+def test_plot_diffusion_labels_an_unknown_protein_with_its_key(tmp_path, monkeypatch):
+    nprots = [10, 20, 30]
+    _write_diffusion_outputs(tmp_path, nprots, [0.05, 0.10, 0.15], [0.95, 0.90, 0.85])
+    monkeypatch.setattr(mplot, "LABEL_DICT", {})  # PKEY is now unknown
+    closed = []
+    original_close = mplot.plt.close
+    monkeypatch.setattr(mplot.plt, "close", lambda fig=None: closed.append(fig))
+    try:
+        plot_diffusion(_diffusion_scenario(nprots), tmp_path)
+        summary = closed[-1]  # the coverage / protein summary is closed last
+        for ax in summary.axes:
+            assert len(ax.collections) > 0  # the points are drawn
+        legend = summary.axes[1].get_legend().get_texts()
+        assert [t.get_text() for t in legend] == [PKEY]
+    finally:
+        for fig in closed:
+            original_close(fig)
+
+
+def test_more_proteins_than_colours_are_still_plotted(tmp_path, monkeypatch):
+    n_extra = len(COLORBLIND_PALETTE) + 1
+    nprots = [10, 20]
+    out = tmp_path / "diff"
+    (out / "timeseries").mkdir(parents=True)
+    rows = []
+    pkeys = [f"P{i}" for i in range(n_extra)]
+    for pkey in pkeys:
+        for n, cov, d in zip(nprots, [0.05, 0.10], [0.95, 0.90], strict=True):
+            rows.append(
+                {
+                    "pkey": pkey,
+                    "nprot": n,
+                    "total_prot": n,
+                    "mean_coverage": cov,
+                    "last_D_dist": d,
+                    "last_D_dist_ci_low": d - 0.02,
+                    "last_D_dist_ci_high": d + 0.02,
+                }
+            )
+            pd.DataFrame(
+                {
+                    "Sqrt_MSD": [1.0, 2.0, 3.0],
+                    "Norm_Diff_Dist": [1.0, 0.9, d],
+                    "Norm_Diff_Dist_ci_low": [1.0, 0.88, d - 0.02],
+                    "Norm_Diff_Dist_ci_high": [1.0, 0.92, d + 0.02],
+                }
+            ).to_csv(out / "timeseries" / f"{pkey}_{n}.csv", index=False)
+    pd.DataFrame(rows).to_csv(out / "scalars.csv", index=False)
+    scenario = ScenarioConfig(
+        name="diff",
+        analysis_type=AnalysisType.DIFFUSION,
+        description=None,
+        random_start_over_whole_membrane=True,
+        number_of_proteins=dict.fromkeys(pkeys, nprots),
+    )
+    plot_diffusion(scenario, tmp_path)
+    assert (out / "picture" / "membrane_diffusion_last_D_dist.png").exists()
+
+
+def test_rate_axis_label_names_what_is_plotted():
+    fig, ax = mplot.plt.subplots()
+    ax.plot([0, 1], [0, 1], label="x")
+    mplot._finalise_rate_ax(ax, _aim_scenario([1.2], {"P": ["hexagonal"]}))
+    assert ax.get_ylabel() == "Hits per save interval"
+    mplot.plt.close(fig)
+
+
+def test_run_scenario_leaves_the_callers_config_unchanged_when_fully_crystal(tmp_path):
+    scenario = ScenarioConfig(
+        name="crystal",
+        analysis_type=AnalysisType.FPT,
+        description=None,
+        random_start_over_whole_membrane=True,
+        number_of_proteins={"P": [1]},
+        mv=[1.2],
+        fully_crystal=True,
+    )
+    (tmp_path / "P_crystal").mkdir()
+    for i in range(2):
+        _write_membrane(
+            tmp_path / "P_crystal" / f"crystal_P_1_regularTrue_1-2_{i}.wkt", [CHOSEN]
+        )
+    cfg = _tiny_config(AnalysisType.FPT)
+    assert cfg.has_ghost is True
+    assert cfg.shift_origin is False
+    with _inline_ensemble():
+        scalars, _ = run_scenario(scenario, cfg, tmp_path)
+    assert len(scalars) == 1
+    assert cfg.has_ghost is True
+    assert cfg.shift_origin is False
+
+
+def test_a_condition_without_files_is_skipped_without_a_run(tmp_path, monkeypatch):
+    def fail(*args, **kwargs):
+        raise AssertionError("load_and_run must not be called without files")
+
+    monkeypatch.setattr("membrane_analysis.pipeline.load_and_run", fail)
+    scenario = _conditions_scenario()
+    scalar_list, rate_constants = _run_one_nprot(
+        scenario,
+        _tiny_config(AnalysisType.FPT),
+        tmp_path,
+        tmp_path,
+        "P",
+        10,
+        [],
+        {},
+    )
+    assert scalar_list == []
+    assert rate_constants == {}
+
+
+def test_scalar_metrics_keep_a_string_nprot_and_no_crystal_fields():
+    row = ScalarMetrics(
+        pkey="P",
+        nprot="hexagonal",
+        total_prot=1,
+        mv=1.2,
+        crystal_prot=None,
+        cg=None,
+        mean_coverage=0.1,
+    ).to_dict()
+    assert row["nprot"] == "hexagonal"
+    assert row["crystal_prot"] is None
+    assert row["cg"] is None
+
+
+def test_make_exp_config_seed_makes_the_random_stream_reproducible():
+    scenario = ScenarioConfig(
+        name="s",
+        analysis_type=AnalysisType.FPT,
+        description=None,
+        random_start_over_whole_membrane=True,
+        number_of_proteins={"P": [10]},
+    )
+
+    def draw(seed):
+        cfg = make_exp_config(scenario, CYTB6F_AREA, PSII_AREA, 3, seed=seed)
+        return list(cfg.rng.integers(0, 1_000_000, size=5))
+
+    assert draw(7) == draw(7)
+    assert draw(7) != draw(8)
+    assert _exp_config(AnalysisType.FPT).rng is None
+
+
+def test_start_area_box_follows_the_membrane_size():
+    cfg = _exp_config(
+        AnalysisType.FPT,
+        random_start_over_whole_membrane=False,
+        membrane_size=(0, 2500),
+    )
+    assert cfg.start_area_by_size[2].bounds == (0, 0, 2500, 2500)
+
+
+def test_start_area_box_defaults_to_5000():
+    cfg = _exp_config(AnalysisType.FPT, random_start_over_whole_membrane=False)
+    assert cfg.start_area_by_size[2].bounds == (0, 0, 5000, 5000)
+
+
+def _start_area_bounds(constraint):
+    cfg = _tiny_config(AnalysisType.FPT)
+    shifts = [(dx * TILE, dy * TILE) for dx in (0, -1, 1) for dy in (0, -1, 1)]
+    cfg.shapes = [translate(CHOSEN, *s) for s in shifts]
+    cfg.chosen_obstacles_by_area = None
+    cfg.steady_state_chosen_obstacle = False
+    cfg.random_start = True
+    cfg.start_area_by_size = (CHOSEN.area, 5, constraint)
+    return cm.brownian_lattice.ExperimentLattice(cfg)._config.start_area.bounds
+
+
+def test_start_area_stays_in_the_original_tile_with_a_tile_sized_box():
+    _, _, max_x, max_y = _start_area_bounds(box(0, 0, TILE, TILE))
+    assert max_x == pytest.approx(19.0)  # the shape ends at 14, the buffer is 5
+    assert max_y == pytest.approx(19.0)
+
+
+def test_start_area_reaches_the_copies_with_an_oversized_box():
+    _, _, max_x, _ = _start_area_bounds(box(0, 0, 5000, 5000))
+    assert max_x > TILE

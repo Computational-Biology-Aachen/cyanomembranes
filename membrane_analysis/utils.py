@@ -18,6 +18,17 @@ def _mv_str(mv) -> str:
     return str(float(mv))
 
 
+def _n_originals(points, ghosts):
+    """Number of original points; with `ghosts` the array holds nine periodic copies."""
+    n = len(points)
+    if not ghosts:
+        return n
+    if n % 9 != 0:
+        msg = f"with ghosts the length of points must be a multiple of 9, got {n}"
+        raise ValueError(msg)
+    return n // 9
+
+
 def _cg_str(cg) -> str:
     """File-name part of the crystal degree: 0 -> "0", 0.4 -> "0.4", 1.0 -> "1".
 
@@ -48,11 +59,12 @@ def _timeseries_filename(condition: Condition, with_mv: bool = False) -> str:
 
 
 def rdf(polygons, n_bins, box_size, r_max=None, ghosts=True):
+    """Radial distribution function of a periodic point set.
 
-    N = len(polygons)
-
-    if ghosts:
-        N = int(N / 9)
+    With `ghosts`, `polygons` holds nine periodic copies of the box and the first
+    ninth must be the originals (`nndf` describes the parameters).
+    """
+    N = _n_originals(polygons, ghosts)
 
     rho = N / box_size**2
 
@@ -124,10 +136,7 @@ def nndf(polygons, n_bins, box_size, r_max=None, ghosts=True):
     binomial error of a single bin.
     """
 
-    N = len(polygons)
-
-    if ghosts:
-        N = int(N / 9)
+    N = _n_originals(polygons, ghosts)
 
     if r_max is None:
         r_max = box_size / 2  # critical for correctness
@@ -162,9 +171,15 @@ def nndf(polygons, n_bins, box_size, r_max=None, ghosts=True):
 def min_neigbor_distance(
     polygons, start_idx, target_idx, box_size, r_max=None, ghosts=True
 ):
+    """Distance from each start point to its nearest target point.
 
+    With `ghosts`, `polygons` holds nine periodic copies of the box (originals
+    first) and `start_idx` the indices of the start points copy by copy; only the
+    first ninth of `start_idx` is used. Points without a target within `r_max` give
+    NaN.
+    """
     if ghosts:
-        start_idx = start_idx[: len(start_idx) // 9]
+        start_idx = start_idx[: _n_originals(start_idx, ghosts)]
 
     tree = cKDTree(polygons)
 

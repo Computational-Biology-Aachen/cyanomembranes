@@ -3,7 +3,7 @@ from __future__ import annotations
 import gc
 from collections.abc import Iterator
 from copy import deepcopy
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 import numpy as np
@@ -77,8 +77,8 @@ def _iter_conditions(
 
 def load_and_run(
     condition: Condition, exp_config
-) -> cm.brownian_lattice.EnsembleExperimentLatticeRun:
-    """Loads files, runs enesmble, returns raw results"""
+) -> cm.brownian_lattice.EnsembleExperimentLatticeRun | None:
+    """Loads files, runs ensemble, returns raw results"""
     if len(condition.file_lst) == 0:
         return None
 
@@ -96,11 +96,11 @@ def load_and_run(
 @dataclass
 class ScalarMetrics:
     pkey: str
-    nprot: float
+    nprot: int | str
     total_prot: float
     mv: float
-    crystal_prot: str
-    cg: float
+    crystal_prot: str | None
+    cg: float | None
     mean_coverage: float
     last_D_dist: float | None = None
     last_D_dist_ci_low: float | None = None
@@ -307,12 +307,7 @@ def _save_condition_outputs(
     scalar_lst.append(scalars)
 
 
-def _save_total(
-    df_scalars: pd.DataFrame,
-    rate_constants: dict,
-    scenario: ScenarioConfig,
-    new_out: Path,
-) -> None:
+def _save_total(df_scalars: pd.DataFrame, new_out: Path) -> None:
     df_scalars.to_csv(new_out / "scalars.csv", index=False)
 
 
@@ -332,14 +327,14 @@ def _run_one_nprot(
     )
 
     if scenario.fully_crystal:
-        exp_config.has_ghost = False
-        exp_config.shift_origin = True
+        exp_config = replace(exp_config, has_ghost=False, shift_origin=True)
+
+    with_mv = scenario.fully_crystal or scenario.analysis_type == AnalysisType.AIM
 
     for condition in iterator:
         if len(condition.file_lst) == 0:
             print(f"No files for {condition.key}, skipping")
-
-        print(condition.file_lst)
+            continue
 
         run = load_and_run(condition, exp_config)
         if run is None:
@@ -358,6 +353,7 @@ def _run_one_nprot(
                 timeseries=time_series,
                 condition=condition,
                 new_out=new_out,
+                with_mv=with_mv
             )
 
         elif scenario.analysis_type == AnalysisType.RATE:
@@ -373,6 +369,7 @@ def _run_one_nprot(
                 timeseries=time_series,
                 condition=condition,
                 new_out=new_out,
+                with_mv=with_mv
             )
 
             rate_constants.setdefault(
@@ -387,6 +384,7 @@ def _run_one_nprot(
                 timeseries=time_series,
                 condition=condition,
                 new_out=new_out,
+                with_mv=with_mv
             )
 
         elif scenario.analysis_type == AnalysisType.AIM:
@@ -397,7 +395,7 @@ def _run_one_nprot(
                 timeseries=time_series,
                 condition=condition,
                 new_out=new_out,
-                with_mv=True,
+                with_mv=with_mv,
             )
 
         _cleanup(run)
@@ -412,8 +410,8 @@ def run_scenario(
     new_out = out_root / scenario.name
     new_out.mkdir(parents=True, exist_ok=True)
 
-    scalar_list = []
-    rate_constants = {}
+    scalar_list: list[ScalarMetrics] = []
+    rate_constants: dict = {}
 
     for pkey, nprot_lst in scenario.number_of_proteins.items():
         for nprot in nprot_lst:
@@ -433,6 +431,6 @@ def run_scenario(
         axis=1,
         how="all",
     )
-    _save_total(df_scalars, rate_constants, scenario, new_out)
+    _save_total(df_scalars, new_out)
 
     return df_scalars, rate_constants
